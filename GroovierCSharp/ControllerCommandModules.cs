@@ -47,7 +47,7 @@ public class ControllerCommandModules : ApplicationCommandModule
         var node = vnext.ConnectedNodes.Values.First();
         if (node is null)
         {
-            await ctx.CreateResponseAsync("Not connection nodes found.");
+            await ctx.CreateResponseAsync("No connection nodes found.");
             return;
         }
 

@@ -14,7 +14,6 @@ public class ControllerCommandModules : ApplicationCommandModule
     [SlashCommand("join", "Joins the voice channel")]
     public async Task join(InteractionContext ctx)
     {
-        Console.WriteLine("Starting join command");
         try
         {
             var vnext = ctx.Client.GetLavalink();
@@ -27,5 +26,15 @@ public class ControllerCommandModules : ApplicationCommandModule
         {
             await ctx.CreateResponseAsync("You need to be in a voice channel.");
         }
+    }
+
+    [SlashCommand("leave", "Leaves the voice channel")]
+    public async Task leave(InteractionContext ctx)
+    {
+        var vnext = ctx.Client.GetLavalink();
+        var node = vnext.ConnectedNodes.Values.First();
+        var connection = node.GetGuildConnection(ctx.Guild);
+        await connection.DisconnectAsync();
+        await ctx.CreateResponseAsync($"Left {connection.Channel.Name}");
     }
 }

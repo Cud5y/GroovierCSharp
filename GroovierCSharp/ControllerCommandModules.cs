@@ -86,16 +86,27 @@ public class ControllerCommandModules : ApplicationCommandModule
             return;
         }
 
-        var loadResult = await node.Rest.GetTracksAsync(query);
-        if (loadResult.LoadResultType is LavalinkLoadResultType.LoadFailed or LavalinkLoadResultType.NoMatches)
+        try
         {
-            await ctx.CreateResponseAsync("No matches found.");
-            return;
-        }
+            var loadResult = await node.Rest.GetTracksAsync(query);
+            switch (loadResult.LoadResultType)
+            {
+                case LavalinkLoadResultType.NoMatches:
+                    await ctx.CreateResponseAsync("No matches found for the query.");
+                    return;
+                case LavalinkLoadResultType.LoadFailed:
+                    await ctx.CreateResponseAsync("Failed to load tracks.");
+                    return;
+            }
 
-        var track = loadResult.Tracks.First();
-        await connection.PlayAsync(track);
-        await ctx.CreateResponseAsync($"Playing {track.Title}");
+            var track = loadResult.Tracks.First();
+            await connection.PlayAsync(track);
+            await ctx.CreateResponseAsync($"Playing {track.Title}");
+        }
+        catch (Exception ex)
+        {
+            await ctx.CreateResponseAsync($"An error occurred: {ex.Message}");
+        }
     }
 
     [SlashCommand("pause", "Pauses the current song")]
@@ -119,6 +130,12 @@ public class ControllerCommandModules : ApplicationCommandModule
         if (connection is null)
         {
             await ctx.CreateResponseAsync("No active connection found.");
+            return;
+        }
+
+        if (connection.CurrentState.CurrentTrack is null)
+        {
+            await ctx.CreateResponseAsync("Nothing is currently playing.");
             return;
         }
 

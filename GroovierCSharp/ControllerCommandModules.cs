@@ -61,4 +61,68 @@ public class ControllerCommandModules : ApplicationCommandModule
         await connection.DisconnectAsync();
         await ctx.CreateResponseAsync($"Left {connection.Channel.Name}");
     }
+
+    [SlashCommand("play", "Plays a song")]
+    public async Task Play(InteractionContext ctx, [Option("query", "The song to play")] string query)
+    {
+        var vnext = ctx.Client.GetLavalink();
+        if (vnext is null)
+        {
+            await ctx.CreateResponseAsync("Lavalink is not connected.");
+            return;
+        }
+
+        var node = vnext.ConnectedNodes.Values.First();
+        if (node is null)
+        {
+            await ctx.CreateResponseAsync("No connection nodes found.");
+            return;
+        }
+
+        var connection = node.GetGuildConnection(ctx.Guild);
+        if (connection is null)
+        {
+            await ctx.CreateResponseAsync("No active connection found.");
+            return;
+        }
+
+        var loadResult = await node.Rest.GetTracksAsync(query);
+        if (loadResult.LoadResultType is LavalinkLoadResultType.LoadFailed or LavalinkLoadResultType.NoMatches)
+        {
+            await ctx.CreateResponseAsync("No matches found.");
+            return;
+        }
+
+        var track = loadResult.Tracks.First();
+        await connection.PlayAsync(track);
+        await ctx.CreateResponseAsync($"Playing {track.Title}");
+    }
+
+    [SlashCommand("pause", "Pauses the current song")]
+    public async Task Pause(InteractionContext ctx)
+    {
+        var vnext = ctx.Client.GetLavalink();
+        if (vnext is null)
+        {
+            await ctx.CreateResponseAsync("Lavalink is not connected.");
+            return;
+        }
+
+        var node = vnext.ConnectedNodes.Values.First();
+        if (node is null)
+        {
+            await ctx.CreateResponseAsync("No connection nodes found.");
+            return;
+        }
+
+        var connection = node.GetGuildConnection(ctx.Guild);
+        if (connection is null)
+        {
+            await ctx.CreateResponseAsync("No active connection found.");
+            return;
+        }
+
+        await connection.PauseAsync();
+        await ctx.CreateResponseAsync("Paused");
+    }
 }

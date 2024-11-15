@@ -1,4 +1,6 @@
 ﻿using DSharpPlus;
+using DSharpPlus.Lavalink;
+using DSharpPlus.Net;
 using DSharpPlus.SlashCommands;
 
 namespace GroovierCSharp;
@@ -22,13 +24,29 @@ internal static class Program
             Token = token,
             TokenType = TokenType.Bot,
             AutoReconnect = true,
-            Intents = DiscordIntents.AllUnprivileged | DiscordIntents.MessageContents
+            Intents = DiscordIntents.AllUnprivileged | DiscordIntents.GuildVoiceStates | DiscordIntents.GuildMessages |
+                      DiscordIntents.Guilds
+        };
+
+        var endpoint = new ConnectionEndpoint
+        {
+            Hostname = "127.0.0.1",
+            Port = 2333
+        };
+
+        var lavalinkConfig = new LavalinkConfiguration
+        {
+            Password = "youshallnotpass",
+            RestEndpoint = endpoint,
+            SocketEndpoint = endpoint
         };
 
         var client = new DiscordClient(config);
+        var lavalink = client.UseLavalink();
         var commands = client.UseSlashCommands();
         commands.RegisterCommands<ControllerCommandModules>(880830252740390992);
         await client.ConnectAsync();
+        await lavalink.ConnectAsync(lavalinkConfig);
         await Task.Delay(-1);
     }
 

@@ -28,7 +28,14 @@ public class ControllerCommandModules : ApplicationCommandModule
         var connection = node.GetGuildConnection(ctx.Guild);
         if (connection is null)
         {
-            await ctx.CreateResponseAsync("No active connection found.");
+            await node.ConnectAsync(ctx.Member.VoiceState.Channel);
+            connection = node.GetGuildConnection(ctx.Guild);
+        }
+
+
+        if (connection is not null && ctx.Member.VoiceState.Channel != connection.Channel)
+        {
+            await ctx.CreateResponseAsync("You need to be in the same voice channel as the bot.");
             return;
         }
 

@@ -45,6 +45,7 @@ internal static class Program
         var lavalink = client.UseLavalink();
         var commands = client.UseSlashCommands();
         commands.RegisterCommands<ControllerCommandModules>(880830252740390992);
+        commands.RegisterCommands<JoinLeaveCommandModules>(880830252740390992);
         await client.ConnectAsync();
         await lavalink.ConnectAsync(lavalinkConfig);
         await Task.Delay(-1);

@@ -46,6 +46,7 @@ internal static class Program
         var commands = client.UseSlashCommands();
         commands.RegisterCommands<ControllerCommandModules>(880830252740390992);
         commands.RegisterCommands<JoinLeaveCommandModules>(880830252740390992);
+        commands.RegisterCommands<QueueControlCommandModules>(880830252740390992);
         await client.ConnectAsync();
         await lavalink.ConnectAsync(lavalinkConfig);
         await Task.Delay(-1);
@@ -63,9 +64,9 @@ internal static class Program
         {
             var trimmedLine = line.Trim();
             if (string.IsNullOrEmpty(trimmedLine) ||
-                trimmedLine.StartsWith('#')) continue; // Skip empty lines or comments
+                trimmedLine.StartsWith('#')) continue;
 
-            var parts = trimmedLine.Split('=', 2); // Split only on the first '='
+            var parts = trimmedLine.Split('=', 2);
             if (parts.Length == 2)
             {
                 var key = parts[0].Trim();

@@ -6,7 +6,9 @@ namespace GroovierCSharp;
 
 public class ControllerCommandModules : ApplicationCommandModule
 {
-    public static readonly ConcurrentQueue<LavalinkTrack> _queue = new();
+    public static ConcurrentQueue<LavalinkTrack> Queue { get; } = new();
+
+    public static ConcurrentQueue<LavalinkTrack> History { get; } = new();
 
     [SlashCommand("Play", "Plays a song")]
     public static async Task Play(InteractionContext ctx, [Option("query", "The song to play")] string query)
@@ -25,19 +27,8 @@ public class ControllerCommandModules : ApplicationCommandModule
             return;
         }
 
-        var connection = node.GetGuildConnection(ctx.Guild);
-        if (connection is null)
-        {
-            await node.ConnectAsync(ctx.Member.VoiceState.Channel);
-            connection = node.GetGuildConnection(ctx.Guild);
-        }
-
-
-        if (connection is not null && ctx.Member.VoiceState.Channel != connection.Channel)
-        {
-            await ctx.CreateResponseAsync("You need to be in the same voice channel as the bot.");
-            return;
-        }
+        var connection = node.GetGuildConnection(ctx.Guild) ?? await node.ConnectAsync(ctx.Member.VoiceState.Channel)
+            .ContinueWith(_ => node.GetGuildConnection(ctx.Guild));
 
         try
         {
@@ -53,7 +44,7 @@ public class ControllerCommandModules : ApplicationCommandModule
             }
 
             var track = loadResult.Tracks.First();
-            _queue.Enqueue(track);
+            Queue.Enqueue(track);
             if (connection.CurrentState.CurrentTrack is null)
             {
                 await PlayNext(connection, ctx);
@@ -70,25 +61,28 @@ public class ControllerCommandModules : ApplicationCommandModule
 
     private static async Task PlayNext(LavalinkGuildConnection connection, InteractionContext ctx)
     {
-        if (_queue.TryDequeue(out var track))
+        if (Queue.TryDequeue(out var track))
         {
+            if (connection.CurrentState.CurrentTrack is null) await ctx.CreateResponseAsync($"Playing {track.Title}");
+
+            History.Enqueue(track);
             await connection.PlayAsync(track);
-            await ctx.CreateResponseAsync($"Playing {track.Title}");
-            if (!_queue.IsEmpty)
+            if (!Queue.IsEmpty)
             {
                 connection.PlaybackFinished += async (_, _) => await PlayNext(connection, ctx);
                 return;
             }
         }
+        else
+        {
+            await ctx.CreateResponseAsync("Queue is empty.");
+        }
 
         if (connection.CurrentState.CurrentTrack is not null)
         {
+            await ctx.CreateResponseAsync($"Stopping {connection.CurrentState.CurrentTrack.Title}");
             await connection.StopAsync();
-            await ctx.CreateResponseAsync($"Skipping {connection.CurrentState.CurrentTrack.Title}");
-            return;
         }
-
-        await ctx.CreateResponseAsync("Queue is empty.");
     }
 
     [SlashCommand("Pause", "Pauses the current song")]

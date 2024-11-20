@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using DSharpPlus.Exceptions;
 using DSharpPlus.Lavalink;
 using DSharpPlus.SlashCommands;
 
@@ -6,6 +7,7 @@ namespace GroovierCSharp;
 
 public class ControllerCommandModules : ApplicationCommandModule
 {
+    private static LavalinkGuildConnection _connection;
     public static ConcurrentQueue<LavalinkTrack> Queue { get; } = new();
 
     public static ConcurrentQueue<LavalinkTrack> History { get; } = new();
@@ -27,7 +29,7 @@ public class ControllerCommandModules : ApplicationCommandModule
             return;
         }
 
-        var connection = node.GetGuildConnection(ctx.Guild) ?? await node.ConnectAsync(ctx.Member.VoiceState.Channel)
+        _connection = node.GetGuildConnection(ctx.Guild) ?? await node.ConnectAsync(ctx.Member.VoiceState.Channel)
             .ContinueWith(_ => node.GetGuildConnection(ctx.Guild));
 
         try
@@ -45,13 +47,7 @@ public class ControllerCommandModules : ApplicationCommandModule
 
             var track = loadResult.Tracks.First();
             Queue.Enqueue(track);
-            if (connection.CurrentState.CurrentTrack is null)
-            {
-                await PlayNext(connection, ctx);
-                return;
-            }
-
-            await ctx.CreateResponseAsync($"Added {track.Title} to the queue");
+            await PlayNext(ctx, false);
         }
         catch (Exception ex)
         {
@@ -59,31 +55,52 @@ public class ControllerCommandModules : ApplicationCommandModule
         }
     }
 
-    private static async Task PlayNext(LavalinkGuildConnection connection, InteractionContext ctx)
+    private static async Task PlayNext(InteractionContext ctx, bool skip)
     {
-        if (Queue.TryDequeue(out var track))
+        try
         {
-            if (connection.CurrentState.CurrentTrack is null) await ctx.CreateResponseAsync($"Playing {track.Title}");
-
-            History.Enqueue(track);
-            await connection.PlayAsync(track);
-            if (!Queue.IsEmpty)
+            if (_connection.CurrentState.PlaybackPosition == TimeSpan.Zero)
             {
-                connection.PlaybackFinished += async (_, _) => await PlayNext(connection, ctx);
-                return;
+                if (Queue.TryDequeue(out var track))
+                {
+                    if (!skip) await ctx.CreateResponseAsync($"Playing {track.Title}");
+                    History.Enqueue(track);
+                    await _connection.PlayAsync(track);
+                    _connection.PlaybackFinished += async (_, _) => await PlayNext(ctx, true);
+                }
+                else
+                {
+                    await ctx.CreateResponseAsync("Queue is empty.");
+                }
+            }
+            else
+            {
+                if (!skip)
+                {
+                    var track = Queue.Last();
+                    await ctx.CreateResponseAsync($"Added {track.Title} to the queue");
+                    _connection.PlaybackFinished += async (_, _) => { await PlayNext(ctx, true); };
+                    return;
+                }
+                else
+                {
+                    Queue.TryDequeue(out var track);
+                    History.Enqueue(track);
+                    await _connection.PlayAsync(track);
+                    _connection.PlaybackFinished += async (_, _) => await PlayNext(ctx, true);
+                }
             }
         }
-        else
+        catch (BadRequestException ex)
         {
-            await ctx.CreateResponseAsync("Queue is empty.");
+            Console.WriteLine(ex.Message);
         }
-
-        if (connection.CurrentState.CurrentTrack is not null)
+        catch (Exception ex)
         {
-            await ctx.CreateResponseAsync($"Stopping {connection.CurrentState.CurrentTrack.Title}");
-            await connection.StopAsync();
+            Console.WriteLine(ex.Message);
         }
     }
+
 
     [SlashCommand("Pause", "Pauses the current song")]
     public static async Task Pause(InteractionContext ctx)
@@ -102,20 +119,13 @@ public class ControllerCommandModules : ApplicationCommandModule
             return;
         }
 
-        var connection = node.GetGuildConnection(ctx.Guild);
-        if (connection is null)
-        {
-            await ctx.CreateResponseAsync("No active connection found.");
-            return;
-        }
-
-        if (connection.CurrentState.CurrentTrack is null)
+        if (_connection.CurrentState.CurrentTrack is null)
         {
             await ctx.CreateResponseAsync("Nothing is currently playing.");
             return;
         }
 
-        await connection.PauseAsync();
+        await _connection.PauseAsync();
         await ctx.CreateResponseAsync("Paused");
     }
 
@@ -204,20 +214,13 @@ public class ControllerCommandModules : ApplicationCommandModule
             return;
         }
 
-        var connection = node.GetGuildConnection(ctx.Guild);
-        if (connection is null)
-        {
-            await ctx.CreateResponseAsync("No active connection found.");
-            return;
-        }
-
-        if (connection.CurrentState.CurrentTrack is null)
+        if (_connection.CurrentState.CurrentTrack is null)
         {
             await ctx.CreateResponseAsync("Nothing is currently playing.");
             return;
         }
 
-        await ctx.CreateResponseAsync($"Skipping {connection.CurrentState.CurrentTrack.Title}");
-        await PlayNext(connection, ctx);
+        await ctx.CreateResponseAsync($"Skipping {_connection.CurrentState.CurrentTrack.Title}");
+        await PlayNext(ctx, true);
     }
 }

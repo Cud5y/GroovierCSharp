@@ -58,6 +58,7 @@ public class JoinLeaveCommandModules : ApplicationCommandModule
             return;
         }
 
+        ControllerCommandModules.Queue.Clear();
         await connection.DisconnectAsync();
         await ctx.CreateResponseAsync($"Left {connection.Channel.Name}");
     }

@@ -3,7 +3,7 @@ using System.Text;
 using DSharpPlus.Lavalink;
 using DSharpPlus.SlashCommands;
 
-namespace GroovierCSharp;
+namespace GroovierCSharp.CommandModules;
 
 public class QueueControlCommandModules : ApplicationCommandModule
 {

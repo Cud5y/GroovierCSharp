@@ -1,7 +1,7 @@
 using DSharpPlus.Lavalink;
 using DSharpPlus.SlashCommands;
 
-namespace GroovierCSharp;
+namespace GroovierCSharp.CommandModules;
 
 public class JoinLeaveCommandModules : ApplicationCommandModule
 {

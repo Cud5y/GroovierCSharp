@@ -2,12 +2,13 @@
 using DSharpPlus.Lavalink;
 using DSharpPlus.Net;
 using DSharpPlus.SlashCommands;
+using GroovierCSharp.CommandModules;
 
 namespace GroovierCSharp;
 
 internal static class Program
 {
-    private static async Task Main(string[] args)
+    private static async Task Main(string[] _)
     {
         LoadEnvFile(".env");
         var token = Environment.GetEnvironmentVariable("DISCORD_TOKEN");

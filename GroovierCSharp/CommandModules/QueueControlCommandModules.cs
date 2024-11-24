@@ -51,15 +51,29 @@ public class QueueControlCommandModules : ApplicationCommandModule
         [Option("index", "The index of the song to remove")]
         long index)
     {
-        var queue = ControllerCommandModules.Queue;
-        if (index < 0 || index >= queue.Count)
+        if (index < 0 || index >= ControllerCommandModules.Queue.Count)
         {
             await ctx.CreateResponseAsync("Invalid index.");
             return;
         }
 
-        var track = queue.ElementAt((int)index);
-        queue = new ConcurrentQueue<LavalinkTrack>(queue.Where(t => t != track));
+        var track = ControllerCommandModules.Queue.ElementAt((int)index);
+        ControllerCommandModules.Queue =
+            new ConcurrentQueue<LavalinkTrack>(ControllerCommandModules.Queue.Where(t => t != track));
         await ctx.CreateResponseAsync($"Removed {track.Title} from the queue.");
+    }
+
+    [SlashCommand("NowPlaying", "Shows the currently playing song")]
+    public static async Task NowPlaying(InteractionContext ctx)
+    {
+        var track = ControllerCommandModules.Connection.CurrentState.CurrentTrack;
+        var trackPosition = ControllerCommandModules.Connection.CurrentState.PlaybackPosition.ToString(@"hh\:mm\:ss");
+        if (track is null)
+        {
+            await ctx.CreateResponseAsync("Nothing is currently playing.");
+            return;
+        }
+
+        await ctx.CreateResponseAsync($"Now playing: {track.Title}\n{trackPosition} : {track.Length}");
     }
 }

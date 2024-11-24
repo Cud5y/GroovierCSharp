@@ -7,9 +7,8 @@ namespace GroovierCSharp.CommandModules;
 
 public class ControllerCommandModules : ApplicationCommandModule
 {
-    private static LavalinkGuildConnection _connection = null!;
-    private static bool _skip = false;
-    public static ConcurrentQueue<LavalinkTrack> Queue { get; } = new();
+    public static LavalinkGuildConnection Connection { get; private set; } = null!;
+    public static ConcurrentQueue<LavalinkTrack> Queue { get; set; } = new();
     public static ConcurrentQueue<LavalinkTrack> History { get; } = new();
 
     [SlashCommand("play", "Plays a song")]
@@ -22,15 +21,15 @@ public class ControllerCommandModules : ApplicationCommandModule
             return;
         }
 
-        _connection = node.GetGuildConnection(ctx.Guild);
-        if (_connection == null)
+        Connection = node.GetGuildConnection(ctx.Guild);
+        if (Connection == null)
         {
             var channel = ctx.Member.VoiceState.Channel;
             await node.ConnectAsync(channel);
-            _connection = node.GetGuildConnection(ctx.Guild);
+            Connection = node.GetGuildConnection(ctx.Guild);
         }
 
-        _connection.PlaybackFinished += OnPlaybackFinished;
+        Connection.PlaybackFinished += OnPlaybackFinished;
 
         try
         {
@@ -46,14 +45,15 @@ public class ControllerCommandModules : ApplicationCommandModule
             }
 
             var track = loadResult.Tracks.First();
-            if (_connection.CurrentState.CurrentTrack is not null)
+            if (Connection.CurrentState.CurrentTrack is not null)
             {
                 Queue.Enqueue(track);
                 await ctx.CreateResponseAsync($"Added {track.Title} to the queue.");
             }
             else
             {
-                await _connection.PlayAsync(track);
+                History.Enqueue(track);
+                await Connection.PlayAsync(track);
                 await ctx.CreateResponseAsync($"Playing {track.Title}");
             }
         }
@@ -67,6 +67,7 @@ public class ControllerCommandModules : ApplicationCommandModule
     {
         if (Queue.TryDequeue(out var nextTrack))
         {
+            History.Enqueue(nextTrack);
             await sender.PlayAsync(nextTrack);
         }
     }
@@ -89,13 +90,13 @@ public class ControllerCommandModules : ApplicationCommandModule
             return;
         }
 
-        if (_connection.CurrentState.CurrentTrack is null)
+        if (Connection.CurrentState.CurrentTrack is null)
         {
             await ctx.CreateResponseAsync("Nothing is currently playing.");
             return;
         }
 
-        await _connection.PauseAsync();
+        await Connection.PauseAsync();
         await ctx.CreateResponseAsync("Paused");
     }
 
@@ -150,14 +151,14 @@ public class ControllerCommandModules : ApplicationCommandModule
             return;
         }
 
-        if (_connection.CurrentState.CurrentTrack is null)
+        if (Connection.CurrentState.CurrentTrack is null)
         {
             await ctx.CreateResponseAsync("Nothing Qis currently playing.");
             return;
         }
 
         Queue.Clear();
-        await _connection.StopAsync();
+        await Connection.StopAsync();
         await ctx.CreateResponseAsync("Stopped");
     }
 
@@ -178,13 +179,13 @@ public class ControllerCommandModules : ApplicationCommandModule
             return;
         }
 
-        if (_connection.CurrentState.CurrentTrack is null)
+        if (Connection.CurrentState.CurrentTrack is null)
         {
             await ctx.CreateResponseAsync("Nothing is currently playing.");
             return;
         }
 
-        await ctx.CreateResponseAsync($"Skipping {_connection.CurrentState.CurrentTrack.Title}");
-        await _connection.StopAsync();
+        await ctx.CreateResponseAsync($"Skipping {Connection.CurrentState.CurrentTrack.Title}");
+        await Connection.StopAsync();
     }
 }

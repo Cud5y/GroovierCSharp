@@ -37,29 +37,9 @@ public class JoinLeaveCommandModules : ApplicationCommandModule
     [SlashCommand("Leave", "Leaves the voice channel")]
     public static async Task Leave(InteractionContext ctx)
     {
-        var vnext = ctx.Client.GetLavalink();
-        if (vnext is null)
-        {
-            await ctx.CreateResponseAsync("Lavalink is not connected.");
-            return;
-        }
-
-        var node = vnext.ConnectedNodes.Values.First();
-        if (node is null)
-        {
-            await ctx.CreateResponseAsync("No connection nodes found.");
-            return;
-        }
-
-        var connection = node.GetGuildConnection(ctx.Guild);
-        if (connection is null)
-        {
-            await ctx.CreateResponseAsync("No active connection found.");
-            return;
-        }
-
+        ControllerCommandModules.ConnectionSetup(ctx);
         ControllerCommandModules.Queue.Clear();
-        await connection.DisconnectAsync();
-        await ctx.CreateResponseAsync($"Left {connection.Channel.Name}");
+        await ControllerCommandModules.Connection.DisconnectAsync();
+        await ctx.CreateResponseAsync($"Left {ControllerCommandModules.Connection.Channel.Name}");
     }
 }

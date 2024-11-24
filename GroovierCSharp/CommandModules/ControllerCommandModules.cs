@@ -7,6 +7,8 @@ namespace GroovierCSharp.CommandModules;
 
 public class ControllerCommandModules : ApplicationCommandModule
 {
+    private static LavalinkExtension _vnext = null!;
+    private static LavalinkNodeConnection _node = null!;
     public static LavalinkGuildConnection Connection { get; private set; } = null!;
     public static ConcurrentQueue<LavalinkTrack> Queue { get; set; } = new();
     public static ConcurrentQueue<LavalinkTrack> History { get; } = new();
@@ -14,8 +16,8 @@ public class ControllerCommandModules : ApplicationCommandModule
     [SlashCommand("play", "Plays a song")]
     public static async Task Play(InteractionContext ctx, [Option("query", "The song to play")] string query)
     {
-        var vnext = ctx.Client.GetLavalink();
-        if (vnext?.ConnectedNodes.Values.FirstOrDefault() is not LavalinkNodeConnection node)
+        _vnext = ctx.Client.GetLavalink();
+        if (_vnext?.ConnectedNodes.Values.FirstOrDefault() is not LavalinkNodeConnection node)
         {
             await ctx.CreateResponseAsync("Lavalink is not connected or no connection nodes found.");
             return;
@@ -76,26 +78,7 @@ public class ControllerCommandModules : ApplicationCommandModule
     [SlashCommand("Pause", "Pauses the current song")]
     public static async Task Pause(InteractionContext ctx)
     {
-        var vnext = ctx.Client.GetLavalink();
-        if (vnext is null)
-        {
-            await ctx.CreateResponseAsync("Lavalink is not connected.");
-            return;
-        }
-
-        var node = vnext.ConnectedNodes.Values.First();
-        if (node is null)
-        {
-            await ctx.CreateResponseAsync("No connection nodes found.");
-            return;
-        }
-
-        if (Connection.CurrentState.CurrentTrack is null)
-        {
-            await ctx.CreateResponseAsync("Nothing is currently playing.");
-            return;
-        }
-
+        await ConnectionSetup(ctx);
         await Connection.PauseAsync();
         await ctx.CreateResponseAsync("Paused");
     }
@@ -103,60 +86,15 @@ public class ControllerCommandModules : ApplicationCommandModule
     [SlashCommand("Resume", "Resumes the current song")]
     public static async Task Resume(InteractionContext ctx)
     {
-        var vnext = ctx.Client.GetLavalink();
-        if (vnext is null)
-        {
-            await ctx.CreateResponseAsync("Lavalink is not connected.");
-            return;
-        }
-
-        var node = vnext.ConnectedNodes.Values.First();
-        if (node is null)
-        {
-            await ctx.CreateResponseAsync("No connection nodes found.");
-            return;
-        }
-
-        var connection = node.GetGuildConnection(ctx.Guild);
-        if (connection is null)
-        {
-            await ctx.CreateResponseAsync("No active connection found.");
-            return;
-        }
-
-        if (connection.CurrentState.CurrentTrack is null)
-        {
-            await ctx.CreateResponseAsync("Nothing is currently playing.");
-            return;
-        }
-
-        await connection.ResumeAsync();
+        await ConnectionSetup(ctx);
+        await Connection.ResumeAsync();
         await ctx.CreateResponseAsync("Resumed");
     }
 
     [SlashCommand("Stop", "Stops the current song")]
     public static async Task Stop(InteractionContext ctx)
     {
-        var vnext = ctx.Client.GetLavalink();
-        if (vnext is null)
-        {
-            await ctx.CreateResponseAsync("Lavalink is not connected.");
-            return;
-        }
-
-        var node = vnext.ConnectedNodes.Values.First();
-        if (node is null)
-        {
-            await ctx.CreateResponseAsync("No connection nodes found.");
-            return;
-        }
-
-        if (Connection.CurrentState.CurrentTrack is null)
-        {
-            await ctx.CreateResponseAsync("Nothing Qis currently playing.");
-            return;
-        }
-
+        await ConnectionSetup(ctx);
         Queue.Clear();
         await Connection.StopAsync();
         await ctx.CreateResponseAsync("Stopped");
@@ -165,27 +103,34 @@ public class ControllerCommandModules : ApplicationCommandModule
     [SlashCommand("Skip", "Skips the current song")]
     public static async Task Skip(InteractionContext ctx)
     {
-        var vnext = ctx.Client.GetLavalink();
-        if (vnext is null)
+        await ConnectionSetup(ctx);
+        await ctx.CreateResponseAsync($"Skipping {Connection.CurrentState.CurrentTrack.Title}");
+        await Connection.StopAsync();
+    }
+
+    public static async Task ConnectionSetup(InteractionContext ctx)
+    {
+        _vnext = ctx.Client.GetLavalink();
+        if (_vnext is null)
         {
             await ctx.CreateResponseAsync("Lavalink is not connected.");
             return;
         }
 
-        var node = vnext.ConnectedNodes.Values.First();
-        if (node is null)
+        _node = _vnext.ConnectedNodes.Values.First();
+        if (_node is null)
         {
             await ctx.CreateResponseAsync("No connection nodes found.");
             return;
         }
 
-        if (Connection.CurrentState.CurrentTrack is null)
+        if (Connection is null)
         {
-            await ctx.CreateResponseAsync("Nothing is currently playing.");
+            await ctx.CreateResponseAsync("No active connection found.");
             return;
         }
 
-        await ctx.CreateResponseAsync($"Skipping {Connection.CurrentState.CurrentTrack.Title}");
-        await Connection.StopAsync();
+        if (Connection.CurrentState.CurrentTrack is null)
+            await ctx.CreateResponseAsync("Nothing is currently playing.");
     }
 }

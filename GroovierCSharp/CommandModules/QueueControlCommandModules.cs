@@ -51,7 +51,8 @@ public class QueueControlCommandModules : ApplicationCommandModule
         [Option("index", "The index of the song to remove")]
         long index)
     {
-        if (index < 0 || index >= ControllerCommandModules.Queue.Count)
+        index++;
+        if (index < 1 || index >= ControllerCommandModules.Queue.Count)
         {
             await ctx.CreateResponseAsync("Invalid index.");
             return;

@@ -9,9 +9,11 @@ public class ControllerCommandModules : ApplicationCommandModule
 {
     private static LavalinkExtension _vnext = null!;
     private static LavalinkNodeConnection _node = null!;
+    public static bool Loop { get; set; } = false;
     public static LavalinkGuildConnection Connection { get; private set; } = null!;
     public static ConcurrentQueue<LavalinkTrack> Queue { get; set; } = new();
-    public static ConcurrentQueue<LavalinkTrack> History { get; } = new();
+    public static ConcurrentQueue<LavalinkTrack> History { get; set; } = new();
+    public static bool QueueLoop { get; set; } = false;
 
     [SlashCommand("play", "Plays a song")]
     public static async Task Play(InteractionContext ctx, [Option("query", "The song to play")] string query)
@@ -67,6 +69,22 @@ public class ControllerCommandModules : ApplicationCommandModule
 
     private static async Task OnPlaybackFinished(LavalinkGuildConnection sender, TrackFinishEventArgs e)
     {
+        if (Loop)
+        {
+            History.Enqueue(History.Last());
+            await Connection.PlayAsync(History.Last());
+            Connection.PlaybackFinished += OnPlaybackFinished;
+            return;
+        }
+
+        if (QueueLoop)
+        {
+            Queue.Enqueue(History.TryDequeue(out var track) ? track : Queue.First());
+            await Connection.PlayAsync(Queue.First());
+            Connection.PlaybackFinished += OnPlaybackFinished;
+            return;
+        }
+
         if (Queue.TryDequeue(out var nextTrack))
         {
             History.Enqueue(nextTrack);
@@ -124,6 +142,7 @@ public class ControllerCommandModules : ApplicationCommandModule
             return;
         }
 
+        // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
         if (Connection is null)
         {
             await ctx.CreateResponseAsync("No active connection found.");

@@ -26,11 +26,13 @@ public class JoinLeaveCommandModules : ApplicationCommandModule
             var node = vnext.ConnectedNodes.Values.First();
             var channel = ctx.Member.VoiceState.Channel;
             await node.ConnectAsync(channel);
-            await ctx.CreateResponseAsync($"Joined {channel.Name}");
+            var embed = ControllerCommandModules.EmbedCreator("Join", $"Joined {channel.Name}");
+            await ctx.CreateResponseAsync(embed);
         }
         catch (Exception)
         {
-            await ctx.CreateResponseAsync("You need to be in a voice channel.");
+            var embed = ControllerCommandModules.EmbedCreator("Join", "You must be in a voice channel.");
+            await ctx.CreateResponseAsync(embed);
         }
     }
 
@@ -40,6 +42,8 @@ public class JoinLeaveCommandModules : ApplicationCommandModule
         ControllerCommandModules.ConnectionSetup(ctx);
         ControllerCommandModules.Queue.Clear();
         await ControllerCommandModules.Connection.DisconnectAsync();
-        await ctx.CreateResponseAsync($"Left {ControllerCommandModules.Connection.Channel.Name}");
+        var embed = ControllerCommandModules.EmbedCreator("Join",
+            $"Left {ControllerCommandModules.Connection.Channel.Name}");
+        await ctx.CreateResponseAsync(embed);
     }
 }

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using DSharpPlus.Entities;
 using DSharpPlus.Lavalink;
 using DSharpPlus.Lavalink.EventArgs;
 using DSharpPlus.SlashCommands;
@@ -51,13 +52,15 @@ public class ControllerCommandModules : ApplicationCommandModule
             if (Connection.CurrentState.CurrentTrack is not null)
             {
                 Queue.Enqueue(track);
-                await ctx.CreateResponseAsync($"Added {track.Title} to the queue.");
+                var embed = EmbedCreator("Added to Queue", track.Title);
+                await ctx.CreateResponseAsync(embed);
             }
             else
             {
                 History.Enqueue(track);
                 await Connection.PlayAsync(track);
-                await ctx.CreateResponseAsync($"Playing {track.Title}");
+                var embed = EmbedCreator("Playing", track.Title);
+                await ctx.CreateResponseAsync(embed);
             }
         }
         catch (Exception ex)
@@ -89,7 +92,8 @@ public class ControllerCommandModules : ApplicationCommandModule
     {
         await ConnectionSetup(ctx);
         await Connection.PauseAsync();
-        await ctx.CreateResponseAsync("Paused");
+        var embed = EmbedCreator("Paused", Connection.CurrentState.CurrentTrack.Title);
+        await ctx.CreateResponseAsync(embed);
     }
 
     [SlashCommand("Resume", "Resumes the current song")]
@@ -97,7 +101,8 @@ public class ControllerCommandModules : ApplicationCommandModule
     {
         await ConnectionSetup(ctx);
         await Connection.ResumeAsync();
-        await ctx.CreateResponseAsync("Resumed");
+        var embed = EmbedCreator("Resumed", Connection.CurrentState.CurrentTrack.Title);
+        await ctx.CreateResponseAsync(embed);
     }
 
     [SlashCommand("Stop", "Stops the current song")]
@@ -106,14 +111,16 @@ public class ControllerCommandModules : ApplicationCommandModule
         await ConnectionSetup(ctx);
         Queue.Clear();
         await Connection.StopAsync();
-        await ctx.CreateResponseAsync("Stopped");
+        var embed = EmbedCreator("Stopped", Connection.CurrentState.CurrentTrack.Title);
+        await ctx.CreateResponseAsync(embed);
     }
 
     [SlashCommand("Skip", "Skips the current song")]
     public static async Task Skip(InteractionContext ctx)
     {
         await ConnectionSetup(ctx);
-        await ctx.CreateResponseAsync($"Skipping {Connection.CurrentState.CurrentTrack.Title}");
+        var embed = EmbedCreator("Skipping", Connection.CurrentState.CurrentTrack.Title);
+        await ctx.CreateResponseAsync(embed);
         await Connection.StopAsync();
     }
 
@@ -142,5 +149,13 @@ public class ControllerCommandModules : ApplicationCommandModule
 
         if (Connection.CurrentState.CurrentTrack is null)
             await ctx.CreateResponseAsync("Nothing is currently playing.");
+    }
+
+    public static DiscordEmbed EmbedCreator(string title, string description)
+    {
+        return new DiscordEmbedBuilder()
+            .WithTitle(title)
+            .WithDescription(description)
+            .WithColor(new DiscordColor(0xb16ad4));
     }
 }

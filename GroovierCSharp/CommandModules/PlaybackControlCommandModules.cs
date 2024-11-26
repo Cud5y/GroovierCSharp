@@ -21,7 +21,8 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
         }
 
         await ControllerCommandModules.Connection.SetVolumeAsync((int)volume);
-        await ctx.CreateResponseAsync($"Volume set to {volume}");
+        var embed = ControllerCommandModules.EmbedCreator("Volume", $"Volume set to {volume}");
+        await ctx.CreateResponseAsync(embed);
     }
 
     [SlashCommand("Seek", "Seeks to a position in the current track")]
@@ -32,17 +33,21 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
         await ControllerCommandModules.ConnectionSetup(ctx);
         if (position < TimeSpan.Zero || position > ControllerCommandModules.Connection.CurrentState.CurrentTrack.Length)
         {
-            await ctx.CreateResponseAsync("Invalid position.");
+            var embed = ControllerCommandModules.EmbedCreator("Seek", "Invalid position.");
+            await ctx.CreateResponseAsync(embed);
             return;
         }
 
         if (position != null)
         {
             await ControllerCommandModules.Connection.SeekAsync(position.Value);
-            await ctx.CreateResponseAsync($"Seeked to {position}S");
+            var embed = ControllerCommandModules.EmbedCreator("Seek", $"Seeked to {position}");
+            await ctx.CreateResponseAsync(embed);
+            return;
         }
 
-        await ctx.CreateResponseAsync("Invalid position.");
+        var seekEmbed = ControllerCommandModules.EmbedCreator("Seek", "Invalid position.");
+        await ctx.CreateResponseAsync(seekEmbed);
     }
 
     [SlashCommand("Loop", "Loops the current track")]
@@ -51,6 +56,8 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
         await ControllerCommandModules.ConnectionSetup(ctx);
         ControllerCommandModules.Loop = !ControllerCommandModules.Loop;
         await ctx.CreateResponseAsync($"Looping set to {ControllerCommandModules.Loop}");
+        var embed = ControllerCommandModules.EmbedCreator("Loop", $"Looping set to {ControllerCommandModules.Loop}");
+        await ctx.CreateResponseAsync(embed);
     }
 
     [SlashCommand("Shuffle", "Shuffles the queue")]
@@ -68,7 +75,8 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
         }
 
         ControllerCommandModules.Queue = new ConcurrentQueue<LavalinkTrack>(shuffled);
-        await ctx.CreateResponseAsync("Queue shuffled.");
+        var embed = ControllerCommandModules.EmbedCreator("Queue", "Queue has been shuffled.");
+        await ctx.CreateResponseAsync(embed);
     }
 
     [SlashCommand("Rewind", "Goes back to the previous track")]
@@ -85,7 +93,9 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
 
             ControllerCommandModules.Queue = queueCopy;
             await ControllerCommandModules.Connection.PlayAsync(previousTrack);
-            await ctx.CreateResponseAsync($"Rewinding to {previousTrack.Title}");
+            var embed = ControllerCommandModules.EmbedCreator("Rewinding",
+                ControllerCommandModules.Connection.CurrentState.CurrentTrack.Title);
+            await ctx.CreateResponseAsync(embed);
             ControllerCommandModules.History =
                 new ConcurrentQueue<LavalinkTrack>(
                     ControllerCommandModules.History.Take(ControllerCommandModules.History.Count - 1));
@@ -93,7 +103,8 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
         }
         else
         {
-            await ctx.CreateResponseAsync("No previous track.");
+            var embed = ControllerCommandModules.EmbedCreator("Rewinding", "No previous track.");
+            await ctx.CreateResponseAsync(embed);
         }
     }
 

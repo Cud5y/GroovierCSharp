@@ -39,7 +39,7 @@ public class JoinLeaveCommandModules : ApplicationCommandModule
     [SlashCommand("Leave", "Leaves the voice channel")]
     public static async Task Leave(InteractionContext ctx)
     {
-        ControllerCommandModules.ConnectionSetup(ctx);
+        await ControllerCommandModules.ConnectionSetup(ctx);
         ControllerCommandModules.Queue.Clear();
         await ControllerCommandModules.Connection.DisconnectAsync();
         var embed = ControllerCommandModules.EmbedCreator("Join",

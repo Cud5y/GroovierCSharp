@@ -45,10 +45,10 @@ public class Setup
         var client = new DiscordClient(config);
         var lavalink = client.UseLavalink();
         var commands = client.UseSlashCommands();
-        commands.RegisterCommands<ControllerCommandModules>(880830252740390992);
-        commands.RegisterCommands<JoinLeaveCommandModules>(880830252740390992);
-        commands.RegisterCommands<QueueControlCommandModules>(880830252740390992);
-        commands.RegisterCommands<PlaybackControlCommandModules>(880830252740390992);
+        commands.RegisterCommands<ControllerCommandModules>();
+        commands.RegisterCommands<JoinLeaveCommandModules>();
+        commands.RegisterCommands<QueueControlCommandModules>();
+        commands.RegisterCommands<PlaybackControlCommandModules>();
         await client.ConnectAsync();
         await lavalink.ConnectAsync(lavalinkConfig);
     }

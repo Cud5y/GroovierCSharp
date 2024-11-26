@@ -1,13 +1,15 @@
 using System.Collections.Concurrent;
+using System.Text.RegularExpressions;
+using DSharpPlus.Entities;
 using DSharpPlus.Lavalink;
 using DSharpPlus.SlashCommands;
+using LyricsScraperNET;
+using LyricsScraperNET.Models.Requests;
 
 namespace GroovierCSharp.CommandModules;
 
-public class PlaybackControlCommandModules : ApplicationCommandModule
+public partial class PlaybackControlCommandModules : ApplicationCommandModule
 {
-    private static bool _boost;
-
     [SlashCommand("Volume", "Sets the volume of the player")]
     public static async Task Volume(InteractionContext ctx, [Option("volume", "The volume to set")] long volume)
     {
@@ -49,14 +51,6 @@ public class PlaybackControlCommandModules : ApplicationCommandModule
         await ControllerCommandModules.ConnectionSetup(ctx);
         ControllerCommandModules.Loop = !ControllerCommandModules.Loop;
         await ctx.CreateResponseAsync($"Looping set to {ControllerCommandModules.Loop}");
-    }
-
-    [SlashCommand("QueueLoop", "Loops the queue")]
-    public static async Task QueueLoop(InteractionContext ctx)
-    {
-        await ControllerCommandModules.ConnectionSetup(ctx);
-        ControllerCommandModules.QueueLoop = !ControllerCommandModules.QueueLoop;
-        await ctx.CreateResponseAsync($"Queue looping set to {ControllerCommandModules.QueueLoop}");
     }
 
     [SlashCommand("Shuffle", "Shuffles the queue")]
@@ -103,19 +97,49 @@ public class PlaybackControlCommandModules : ApplicationCommandModule
         }
     }
 
-    [SlashCommand("BassBoost", "Boosts the bass of the player")]
-    public static async Task BassBoost(InteractionContext ctx)
+    [SlashCommand("Lyrics", "Displays the lyrics of the current track")]
+    public static async Task Lyrics(InteractionContext ctx)
     {
         await ControllerCommandModules.ConnectionSetup(ctx);
-        _boost = !_boost;
-        if (_boost)
+        await ctx.CreateResponseAsync("Searching for lyrics...");
+        var lyricsScraperClient = new LyricsScraperClient().WithAllProviders();
+        var artist = ControllerCommandModules.Connection.CurrentState.CurrentTrack.Author;
+        var track = ControllerCommandModules.Connection.CurrentState.CurrentTrack.Title;
+        var cleanTrack = CleanTrackTitle(track, artist);
+        var searchRequest = new ArtistAndSongSearchRequest(artist, cleanTrack);
+        var searchResult = await lyricsScraperClient.SearchLyricAsync(searchRequest);
+        if (!searchResult.IsEmpty())
         {
-            await ControllerCommandModules.Connection.AdjustEqualizerAsync(new LavalinkBandAdjustment(0, 0.25f));
-            await ctx.CreateResponseAsync("Bass boosted.");
+            DiscordEmbedBuilder embed = new()
+            {
+                Title = ControllerCommandModules.Connection.CurrentState.CurrentTrack.Title,
+                Description = searchResult.LyricText,
+                Color = new DiscordColor(0xb16ad4)
+            };
+            await ctx.DeleteResponseAsync();
+            await ctx.FollowUpAsync(new DiscordFollowupMessageBuilder().AddEmbed(embed));
             return;
         }
 
-        await ControllerCommandModules.Connection.AdjustEqualizerAsync(new LavalinkBandAdjustment(0, 0));
-        await ctx.CreateResponseAsync("Bass boost removed.");
+        await ctx.DeleteResponseAsync();
+        await ctx.FollowUpAsync(new DiscordFollowupMessageBuilder().WithContent("Lyrics not found."));
     }
+
+    private static string CleanTrackTitle(string title, string artist = "")
+    {
+        // List of words to remove from the title
+        var wordsToRemove = new[]
+        {
+            "official", "video", "lyrics", "audio", "ft.", "feat.", "remix", "version", "lyric", "music", "hd", "hq",
+            "full", "song", "original", "visualizer", "visualiser,1080p", "-", "4k", artist
+        };
+
+        title = wordsToRemove.Aggregate(title,
+            (current, word) => current.Replace(word, "", StringComparison.OrdinalIgnoreCase));
+        title = MyRegex().Replace(title, "");
+        return title.Trim();
+    }
+
+    [GeneratedRegex(@"[\[\](){}]")]
+    private static partial Regex MyRegex();
 }

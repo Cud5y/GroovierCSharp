@@ -13,7 +13,6 @@ public class ControllerCommandModules : ApplicationCommandModule
     public static LavalinkGuildConnection Connection { get; private set; } = null!;
     public static ConcurrentQueue<LavalinkTrack> Queue { get; set; } = new();
     public static ConcurrentQueue<LavalinkTrack> History { get; set; } = new();
-    public static bool QueueLoop { get; set; } = false;
 
     [SlashCommand("play", "Plays a song")]
     public static async Task Play(InteractionContext ctx, [Option("query", "The song to play")] string query)
@@ -73,14 +72,6 @@ public class ControllerCommandModules : ApplicationCommandModule
         {
             History.Enqueue(History.Last());
             await Connection.PlayAsync(History.Last());
-            Connection.PlaybackFinished += OnPlaybackFinished;
-            return;
-        }
-
-        if (QueueLoop)
-        {
-            Queue.Enqueue(History.TryDequeue(out var track) ? track : Queue.First());
-            await Connection.PlayAsync(Queue.First());
             Connection.PlaybackFinished += OnPlaybackFinished;
             return;
         }

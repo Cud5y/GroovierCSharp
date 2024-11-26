@@ -48,6 +48,7 @@ public class Setup
         commands.RegisterCommands<ControllerCommandModules>(880830252740390992);
         commands.RegisterCommands<JoinLeaveCommandModules>(880830252740390992);
         commands.RegisterCommands<QueueControlCommandModules>(880830252740390992);
+        commands.RegisterCommands<PlaybackControlCommandModules>(880830252740390992);
         await client.ConnectAsync();
         await lavalink.ConnectAsync(lavalinkConfig);
     }

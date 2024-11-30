@@ -10,7 +10,7 @@ public class ControllerCommandModules : ApplicationCommandModule
 {
     private static LavalinkExtension _vnext = null!;
     private static LavalinkNodeConnection _node = null!;
-    public static bool Loop { get; set; } = false;
+    public static bool Loop { get; set; }
     public static LavalinkGuildConnection Connection { get; private set; } = null!;
     public static ConcurrentQueue<LavalinkTrack> Queue { get; set; } = new();
     public static ConcurrentQueue<LavalinkTrack> History { get; set; } = new();
@@ -19,7 +19,8 @@ public class ControllerCommandModules : ApplicationCommandModule
     public static async Task Play(InteractionContext ctx, [Option("query", "The song to play")] string query)
     {
         _vnext = ctx.Client.GetLavalink();
-        if (_vnext?.ConnectedNodes.Values.FirstOrDefault() is not LavalinkNodeConnection node)
+        var node = _vnext?.ConnectedNodes.Values.FirstOrDefault();
+        if (node == null)
         {
             await ctx.CreateResponseAsync("Lavalink is not connected or no connection nodes found.");
             return;
@@ -34,38 +35,62 @@ public class ControllerCommandModules : ApplicationCommandModule
         }
 
         Connection.PlaybackFinished += OnPlaybackFinished;
-
         try
         {
-            var loadResult = await node.Rest.GetTracksAsync(query);
-            switch (loadResult.LoadResultType)
+            LavalinkLoadResult loadResult;
+            if (Uri.TryCreate(query, UriKind.Absolute, out var uri))
             {
-                case LavalinkLoadResultType.NoMatches:
-                    await ctx.CreateResponseAsync("No matches found for the query.");
-                    return;
-                case LavalinkLoadResultType.LoadFailed:
-                    await ctx.CreateResponseAsync("Failed to load tracks.");
-                    return;
-            }
-
-            var track = loadResult.Tracks.First();
-            if (Connection.CurrentState.CurrentTrack is not null)
-            {
-                Queue.Enqueue(track);
-                var embed = EmbedCreator("Added to Queue", track.Title);
-                await ctx.CreateResponseAsync(embed);
+                loadResult = await node.Rest.GetTracksAsync(uri);
             }
             else
             {
-                History.Enqueue(track);
-                await Connection.PlayAsync(track);
-                var embed = EmbedCreator("Playing", track.Title);
-                await ctx.CreateResponseAsync(embed);
+                loadResult = await node.Rest.GetTracksAsync(query);
             }
+
+            await LoadFeedback(loadResult, ctx);
+            var track = loadResult.Tracks.First();
+            await PlaySong(track, ctx);
         }
         catch (Exception ex)
         {
             await ctx.CreateResponseAsync($"An error occurred: {ex.Message}");
+        }
+    }
+
+    private static async Task LoadFeedback(LavalinkLoadResult loadResult, InteractionContext ctx)
+    {
+        switch (loadResult.LoadResultType)
+        {
+            case LavalinkLoadResultType.NoMatches:
+                await ctx.CreateResponseAsync("No matches found for the query.");
+                return;
+            case LavalinkLoadResultType.LoadFailed:
+                await ctx.CreateResponseAsync("Failed to load tracks.");
+                return;
+            case LavalinkLoadResultType.PlaylistLoaded:
+                foreach (var playlistTrack in loadResult.Tracks) Queue.Enqueue(playlistTrack);
+
+                var playlistEmbed = EmbedCreator("Playlist Loaded",
+                    $"Loaded playlist with {loadResult.Tracks.Count()} tracks.");
+                await ctx.CreateResponseAsync(playlistEmbed);
+                break;
+        }
+    }
+
+    private static async Task PlaySong(LavalinkTrack track, InteractionContext ctx)
+    {
+        if (Connection.CurrentState.CurrentTrack is not null)
+        {
+            Queue.Enqueue(track);
+            var embed = EmbedCreator("Added to Queue", track.Title);
+            await ctx.CreateResponseAsync(embed);
+        }
+        else
+        {
+            History.Enqueue(track);
+            await Connection.PlayAsync(track);
+            var embed = EmbedCreator("Playing", track.Title);
+            await ctx.CreateResponseAsync(embed);
         }
     }
 
@@ -75,7 +100,6 @@ public class ControllerCommandModules : ApplicationCommandModule
         {
             History.Enqueue(History.Last());
             await Connection.PlayAsync(History.Last());
-            Connection.PlaybackFinished += OnPlaybackFinished;
             return;
         }
 

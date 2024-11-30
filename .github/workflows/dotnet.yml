@@ -26,6 +26,3 @@ jobs:
       run: dotnet build --no-restore
     - name: Test
       run: dotnet test --no-build --verbosity normal
-    - name: Cache
-      uses: actions/cache@v4.1.2
-            

@@ -96,6 +96,7 @@ public class ControllerCommandModules : ApplicationCommandModule
 
     private static async Task OnPlaybackFinished(LavalinkGuildConnection sender, TrackFinishEventArgs e)
     {
+        if (Connection.CurrentState.CurrentTrack is not null) return;
         if (Loop)
         {
             History.Enqueue(History.Last());

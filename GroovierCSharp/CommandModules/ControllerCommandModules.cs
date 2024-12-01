@@ -134,6 +134,7 @@ public class ControllerCommandModules : ApplicationCommandModule
         Queue.Clear();
         _disconnectTimer?.Dispose();
         _disconnectTimer = null;
+        GC.Collect();
     }
 
     [SlashCommand("Pause", "Pauses the current song")]

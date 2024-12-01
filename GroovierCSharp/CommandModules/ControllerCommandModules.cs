@@ -10,6 +10,7 @@ public class ControllerCommandModules : ApplicationCommandModule
 {
     private static LavalinkExtension _vnext = null!;
     private static LavalinkNodeConnection _node = null!;
+    private static Timer? _disconnectTimer;
     public static bool Loop { get; set; }
     public static LavalinkGuildConnection Connection { get; private set; } = null!;
     public static ConcurrentQueue<LavalinkTrack> Queue { get; set; } = new();
@@ -91,6 +92,7 @@ public class ControllerCommandModules : ApplicationCommandModule
             await Connection.PlayAsync(track);
             var embed = EmbedCreator("Playing", track.Title);
             await ctx.CreateResponseAsync(embed);
+            ResetDisconnectTimer(); // Reset the timer when a new song starts playing
         }
     }
 
@@ -109,8 +111,30 @@ public class ControllerCommandModules : ApplicationCommandModule
             History.Enqueue(nextTrack);
             await sender.PlayAsync(nextTrack);
         }
+        else
+        {
+            StartDisconnectTimer(); // Start the timer when no more songs are in the queue
+        }
     }
 
+    private static void StartDisconnectTimer()
+    {
+        _disconnectTimer?.Dispose();
+        _disconnectTimer = new Timer(DisconnectBot, null, TimeSpan.FromMinutes(15), Timeout.InfiniteTimeSpan);
+    }
+
+    private static void ResetDisconnectTimer()
+    {
+        _disconnectTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+    }
+
+    private static void DisconnectBot(object? state)
+    {
+        Connection.DisconnectAsync();
+        Queue.Clear();
+        _disconnectTimer?.Dispose();
+        _disconnectTimer = null;
+    }
 
     [SlashCommand("Pause", "Pauses the current song")]
     public static async Task Pause(InteractionContext ctx)

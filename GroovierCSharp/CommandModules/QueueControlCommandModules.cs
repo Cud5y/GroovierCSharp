@@ -56,19 +56,21 @@ public class QueueControlCommandModules : ApplicationCommandModule
         [Option("index", "The index of the song to remove")]
         long index)
     {
-        index++;
-        if (index < 1 || index >= ControllerCommandModules.Queue.Count)
+        index -= 1;
+        if (index < 0 || index >= ControllerCommandModules.Queue.Count)
         {
             var embed = ControllerCommandModules.EmbedCreator("Queue", "Invalid index.");
             await ctx.CreateResponseAsync(embed);
             return;
         }
 
-        var track = ControllerCommandModules.Queue.ElementAt((int)index);
-        ControllerCommandModules.Queue =
-            new ConcurrentQueue<LavalinkTrack>(ControllerCommandModules.Queue.Where(t => t != track));
+        var queue = ControllerCommandModules.Queue.ToList();
+        var track = queue[(int)index];
+        queue.RemoveAt((int)index);
+        ControllerCommandModules.Queue = new ConcurrentQueue<LavalinkTrack>(queue);
         var removeEmbed = ControllerCommandModules.EmbedCreator("Queue", $"Removed {track.Title} from the queue.");
         await ctx.CreateResponseAsync(removeEmbed);
+        GC.Collect();
     }
 
     [SlashCommand("NowPlaying", "Shows the currently playing song")]

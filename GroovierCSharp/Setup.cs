@@ -1,4 +1,5 @@
 using DSharpPlus;
+using DSharpPlus.Entities;
 using DSharpPlus.Lavalink;
 using DSharpPlus.Net;
 using DSharpPlus.SlashCommands;
@@ -28,6 +29,11 @@ public class Setup
             Intents = DiscordIntents.AllUnprivileged | DiscordIntents.GuildVoiceStates | DiscordIntents.GuildMessages |
                       DiscordIntents.Guilds
         };
+        var activity = new DiscordActivity
+        {
+            Name = "/Play",
+            ActivityType = ActivityType.ListeningTo
+        };
 
         var endpoint = new ConnectionEndpoint
         {
@@ -49,7 +55,7 @@ public class Setup
         commands.RegisterCommands<JoinLeaveCommandModules>();
         commands.RegisterCommands<QueueControlCommandModules>();
         commands.RegisterCommands<PlaybackControlCommandModules>();
-        await client.ConnectAsync();
+        await client.ConnectAsync(activity, UserStatus.DoNotDisturb);
         await lavalink.ConnectAsync(lavalinkConfig);
     }
 

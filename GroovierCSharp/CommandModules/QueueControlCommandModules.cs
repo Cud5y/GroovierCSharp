@@ -70,6 +70,7 @@ public class QueueControlCommandModules : ApplicationCommandModule
         ControllerCommandModules.Queue = new ConcurrentQueue<LavalinkTrack>(queue);
         var removeEmbed = ControllerCommandModules.EmbedCreator("Queue", $"Removed {track.Title} from the queue.");
         await ctx.CreateResponseAsync(removeEmbed);
+        GC.Collect();
     }
 
     [SlashCommand("NowPlaying", "Shows the currently playing song")]

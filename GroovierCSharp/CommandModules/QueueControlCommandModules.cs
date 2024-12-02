@@ -89,7 +89,7 @@ public class QueueControlCommandModules : ApplicationCommandModule
         }
 
         var nowPlayingEmbed = ControllerCommandModules.EmbedCreator("Now Playing",
-            $"Now playing: {track.Title}\n{trackPosition} : {track.Length}");
+            $"Now playing: {track.Title}\n{trackPosition} : {track.Length.ToString(@"hh\:mm\:ss")}");
         await ctx.CreateResponseAsync(nowPlayingEmbed);
     }
 }

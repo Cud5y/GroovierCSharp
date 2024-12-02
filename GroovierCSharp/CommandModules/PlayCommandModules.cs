@@ -81,7 +81,7 @@ public class PlayCommandModules : ApplicationCommandModule
         }
         else
         {
-            LavaLinkController.History.Enqueue(track);
+            HistoryQueueManager.AddTrackToHistory(ctx.Guild.Id, track);
             await LavaLinkController.Connection.PlayAsync(track);
             var embed = ControllerCommandModules.EmbedCreator("Playing", track.Title);
             await ctx.CreateResponseAsync(embed);
@@ -94,14 +94,15 @@ public class PlayCommandModules : ApplicationCommandModule
         if (LavaLinkController.Connection.CurrentState.CurrentTrack is not null) return;
         if (LavaLinkController.Loop)
         {
-            LavaLinkController.History.Enqueue(LavaLinkController.History.Last());
-            await LavaLinkController.Connection.PlayAsync(LavaLinkController.History.Last());
+            HistoryQueueManager.TryGetHistory(sender.Guild.Id, out var history);
+            HistoryQueueManager.AddTrackToHistory(sender.Guild.Id, history.Last());
+            await LavaLinkController.Connection.PlayAsync(history.Last());
             return;
         }
 
         if (GuildQueueManager.TryDequeueTrack(sender.Guild.Id, out var nextTrack))
         {
-            LavaLinkController.History.Enqueue(nextTrack);
+            HistoryQueueManager.AddTrackToHistory(sender.Guild.Id, nextTrack);
             await sender.PlayAsync(nextTrack);
         }
         else

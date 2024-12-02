@@ -67,8 +67,9 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
         await ControllerCommandModules.ConnectionSetup(ctx);
         GuildQueueManager.TryGetQueue(ctx.Guild.Id, out var queue);
         var queueArray = queue.ToArray();
-        var history = LavaLinkController.History.ToArray();
-        var shuffled = queueArray.Concat(history).ToArray();
+        HistoryQueueManager.TryGetHistory(ctx.Guild.Id, out var history);
+        var historyArray = history.ToArray();
+        var shuffled = queueArray.Concat(historyArray).ToArray();
         var rng = new Random();
         for (var i = shuffled.Length - 1; i > 0; i--)
         {
@@ -87,23 +88,25 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
     public static async Task Rewind(InteractionContext ctx)
     {
         await ControllerCommandModules.ConnectionSetup(ctx);
-        if (LavaLinkController.History.Count > 0)
+        HistoryQueueManager.TryGetHistory(ctx.Guild.Id, out var history);
+        if (history.Count > 0)
         {
-            var previousTrack = LavaLinkController.History.Last();
+            var previousTrack = history.Last();
             var currentTrack = LavaLinkController.Connection.CurrentState.CurrentTrack;
             ConcurrentQueue<LavalinkTrack> queueCopy = new();
             queueCopy.Enqueue(currentTrack);
             GuildQueueManager.TryGetQueue(ctx.Guild.Id, out var queue);
             foreach (var tracks in queue) queueCopy.Enqueue(tracks);
-
-            queue = queueCopy;
+            queue.Clear();
+            foreach (var tracks in queueCopy) GuildQueueManager.AddTrackToQueue(ctx.Guild.Id, tracks);
+            queueCopy.Clear();
             await LavaLinkController.Connection.PlayAsync(previousTrack);
             var embed = ControllerCommandModules.EmbedCreator("Rewinding",
                 LavaLinkController.Connection.CurrentState.CurrentTrack.Title);
             await ctx.CreateResponseAsync(embed);
-            LavaLinkController.History =
-                new ConcurrentQueue<LavalinkTrack>(
-                    LavaLinkController.History.Take(LavaLinkController.History.Count - 1));
+            var historyCopy = new ConcurrentQueue<LavalinkTrack>(history.Take(history.Count - 1));
+            foreach (var item in historyCopy) HistoryQueueManager.AddTrackToHistory(ctx.Guild.Id, item);
+            historyCopy.Clear();
             GC.Collect();
         }
         else

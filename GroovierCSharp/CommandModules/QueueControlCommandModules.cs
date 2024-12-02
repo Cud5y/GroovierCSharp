@@ -27,7 +27,7 @@ public class QueueControlCommandModules : ApplicationCommandModule
     [SlashCommand("History", "Shows the history of played songs")]
     public static async Task History(InteractionContext ctx)
     {
-        var history = LavaLinkController.History;
+        HistoryQueueManager.TryGetHistory(ctx.Guild.Id, out var history);
         if (history.Count == 0)
         {
             var embed = ControllerCommandModules.EmbedCreator("History", "The history is empty.");

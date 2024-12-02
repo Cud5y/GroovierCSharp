@@ -56,6 +56,7 @@ public class JoinLeaveCommandModules : ApplicationCommandModule
 
         GuildQueueManager.TryGetQueue(ctx.Guild.Id, out var queue);
         queue.Clear();
+        await LavaLinkController.Connection.StopAsync();
         await LavaLinkController.Connection.DisconnectAsync();
         var embed = ControllerCommandModules.EmbedCreator("Join",
             $"Left {LavaLinkController.Connection.Channel.Name}");

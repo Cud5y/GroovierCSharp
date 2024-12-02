@@ -51,6 +51,7 @@ public class Setup
         var client = new DiscordClient(config);
         var lavalink = client.UseLavalink();
         var commands = client.UseSlashCommands();
+        commands.RegisterCommands<PlayCommandModules>();
         commands.RegisterCommands<ControllerCommandModules>();
         commands.RegisterCommands<JoinLeaveCommandModules>();
         commands.RegisterCommands<QueueControlCommandModules>();

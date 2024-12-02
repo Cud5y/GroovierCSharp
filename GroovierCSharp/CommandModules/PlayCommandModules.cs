@@ -61,10 +61,13 @@ public class PlayCommandModules : ApplicationCommandModule
                 foreach (var playlistTrack in loadResult.Tracks)
                     GuildQueueManager.AddTrackToQueue(ctx.Guild.Id, playlistTrack);
 
+
                 var playlistEmbed = ControllerCommandModules.EmbedCreator("Playlist Loaded",
                     $"Loaded playlist with {loadResult.Tracks.Count()} tracks.");
                 await ctx.CreateResponseAsync(playlistEmbed);
-                break;
+                GuildQueueManager.TryDequeueTrack(ctx.Guild.Id, out var nextTrack);
+                await PlaySong(nextTrack, ctx);
+                return;
         }
     }
 

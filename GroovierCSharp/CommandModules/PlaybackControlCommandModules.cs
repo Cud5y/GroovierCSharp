@@ -76,7 +76,9 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
             (shuffled[i], shuffled[j]) = (shuffled[j], shuffled[i]);
         }
 
-        queue = new ConcurrentQueue<LavalinkTrack>(shuffled);
+        queue.Clear();
+        foreach (var item in shuffled) GuildQueueManager.AddTrackToQueue(ctx.Guild.Id, item);
+
         var embed = ControllerCommandModules.EmbedCreator("Queue", "Queue has been shuffled.");
         await ctx.CreateResponseAsync(embed);
     }

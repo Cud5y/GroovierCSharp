@@ -88,32 +88,26 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
     public static async Task Rewind(InteractionContext ctx)
     {
         await ControllerCommandModules.ConnectionSetup(ctx);
-        HistoryQueueManager.TryGetHistory(ctx.Guild.Id, out var history);
-        if (history.Count > 0)
+        if (!HistoryQueueManager.TryGetHistory(ctx.Guild.Id, out var history) || history.Count == 0)
         {
-            var previousTrack = history.Last();
-            var currentTrack = LavaLinkController.Connection.CurrentState.CurrentTrack;
-            ConcurrentQueue<LavalinkTrack> queueCopy = new();
-            queueCopy.Enqueue(currentTrack);
-            GuildQueueManager.TryGetQueue(ctx.Guild.Id, out var queue);
-            foreach (var tracks in queue) queueCopy.Enqueue(tracks);
-            queue.Clear();
-            foreach (var tracks in queueCopy) GuildQueueManager.AddTrackToQueue(ctx.Guild.Id, tracks);
-            queueCopy.Clear();
-            await LavaLinkController.Connection.PlayAsync(previousTrack);
-            var embed = ControllerCommandModules.EmbedCreator("Rewinding",
-                LavaLinkController.Connection.CurrentState.CurrentTrack.Title);
-            await ctx.CreateResponseAsync(embed);
-            var historyCopy = new ConcurrentQueue<LavalinkTrack>(history.Take(history.Count - 1));
-            foreach (var item in historyCopy) HistoryQueueManager.AddTrackToHistory(ctx.Guild.Id, item);
-            historyCopy.Clear();
-            GC.Collect();
+            await ctx.CreateResponseAsync(ControllerCommandModules.EmbedCreator("Rewinding", "No previous track."));
+            return;
         }
-        else
-        {
-            var embed = ControllerCommandModules.EmbedCreator("Rewinding", "No previous track.");
-            await ctx.CreateResponseAsync(embed);
-        }
+
+        var previousTrack = history.Last();
+        var currentTrack = LavaLinkController.Connection.CurrentState.CurrentTrack;
+        GuildQueueManager.TryGetQueue(ctx.Guild.Id, out var queue);
+
+        var queueCopy = new ConcurrentQueue<LavalinkTrack>(queue.Prepend(currentTrack));
+        queue.Clear();
+        foreach (var track in queueCopy) GuildQueueManager.AddTrackToQueue(ctx.Guild.Id, track);
+
+        await LavaLinkController.Connection.PlayAsync(previousTrack);
+        await ctx.CreateResponseAsync(ControllerCommandModules.EmbedCreator("Rewinding", previousTrack.Title));
+
+        var historyCopy = new ConcurrentQueue<LavalinkTrack>(history.Take(history.Count - 1));
+        history.Clear();
+        foreach (var track in historyCopy) HistoryQueueManager.AddTrackToHistory(ctx.Guild.Id, track);
     }
 
     [SlashCommand("Lyrics", "Displays the lyrics of the current track")]

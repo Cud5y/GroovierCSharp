@@ -1,7 +1,6 @@
-using System.Collections.Concurrent;
 using System.Text;
-using DSharpPlus.Lavalink;
 using DSharpPlus.SlashCommands;
+using GroovierCSharp.Controllers;
 
 namespace GroovierCSharp.CommandModules;
 
@@ -10,7 +9,7 @@ public class QueueControlCommandModules : ApplicationCommandModule
     [SlashCommand("Queue", "Shows the current queue")]
     public static async Task Queue(InteractionContext ctx)
     {
-        var queue = ControllerCommandModules.Queue;
+        GuildQueueManager.TryGetQueue(ctx.Guild.Id, out var queue);
         if (queue.Count == 0)
         {
             var embed = ControllerCommandModules.EmbedCreator("Queue", "The queue is empty.");
@@ -28,7 +27,7 @@ public class QueueControlCommandModules : ApplicationCommandModule
     [SlashCommand("History", "Shows the history of played songs")]
     public static async Task History(InteractionContext ctx)
     {
-        var history = ControllerCommandModules.History;
+        var history = LavaLinkController.History;
         if (history.Count == 0)
         {
             var embed = ControllerCommandModules.EmbedCreator("History", "The history is empty.");
@@ -46,7 +45,8 @@ public class QueueControlCommandModules : ApplicationCommandModule
     [SlashCommand("Clear", "Clears the queue")]
     public static async Task Clear(InteractionContext ctx)
     {
-        ControllerCommandModules.Queue.Clear();
+        GuildQueueManager.TryGetQueue(ctx.Guild.Id, out var queue);
+        queue.Clear();
         var embed = ControllerCommandModules.EmbedCreator("Queue", "The queue has been cleared.");
         await ctx.CreateResponseAsync(embed);
     }
@@ -56,18 +56,21 @@ public class QueueControlCommandModules : ApplicationCommandModule
         [Option("index", "The index of the song to remove")]
         long index)
     {
+        GuildQueueManager.TryGetQueue(ctx.Guild.Id, out var queue);
         index -= 1;
-        if (index < 0 || index >= ControllerCommandModules.Queue.Count)
+        if (index < 0 || index >= queue.Count)
         {
             var embed = ControllerCommandModules.EmbedCreator("Queue", "Invalid index.");
             await ctx.CreateResponseAsync(embed);
             return;
         }
 
-        var queue = ControllerCommandModules.Queue.ToList();
-        var track = queue[(int)index];
-        queue.RemoveAt((int)index);
-        ControllerCommandModules.Queue = new ConcurrentQueue<LavalinkTrack>(queue);
+        var queueList = queue.ToList();
+        var track = queueList[(int)index];
+        queueList.RemoveAt((int)index);
+        queue.Clear();
+        foreach (var item in queueList) GuildQueueManager.AddTrackToQueue(ctx.Guild.Id, item);
+
         var removeEmbed = ControllerCommandModules.EmbedCreator("Queue", $"Removed {track.Title} from the queue.");
         await ctx.CreateResponseAsync(removeEmbed);
         GC.Collect();
@@ -76,8 +79,8 @@ public class QueueControlCommandModules : ApplicationCommandModule
     [SlashCommand("NowPlaying", "Shows the currently playing song")]
     public static async Task NowPlaying(InteractionContext ctx)
     {
-        var track = ControllerCommandModules.Connection.CurrentState.CurrentTrack;
-        var trackPosition = ControllerCommandModules.Connection.CurrentState.PlaybackPosition.ToString(@"hh\:mm\:ss");
+        var track = LavaLinkController.Connection.CurrentState.CurrentTrack;
+        var trackPosition = LavaLinkController.Connection.CurrentState.PlaybackPosition.ToString(@"hh\:mm\:ss");
         if (track is null)
         {
             var embed = ControllerCommandModules.EmbedCreator("Now Playing", "Nothing is currently playing.");

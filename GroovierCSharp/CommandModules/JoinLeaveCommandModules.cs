@@ -1,5 +1,6 @@
 using DSharpPlus.Lavalink;
 using DSharpPlus.SlashCommands;
+using GroovierCSharp.Controllers;
 
 namespace GroovierCSharp.CommandModules;
 
@@ -53,10 +54,11 @@ public class JoinLeaveCommandModules : ApplicationCommandModule
             return;
         }
 
-        ControllerCommandModules.Queue.Clear();
-        await ControllerCommandModules.Connection.DisconnectAsync();
+        GuildQueueManager.TryGetQueue(ctx.Guild.Id, out var queue);
+        queue.Clear();
+        await LavaLinkController.Connection.DisconnectAsync();
         var embed = ControllerCommandModules.EmbedCreator("Join",
-            $"Left {ControllerCommandModules.Connection.Channel.Name}");
+            $"Left {LavaLinkController.Connection.Channel.Name}");
         await ctx.CreateResponseAsync(embed);
     }
 }

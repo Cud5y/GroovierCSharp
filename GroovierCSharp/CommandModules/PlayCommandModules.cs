@@ -13,20 +13,11 @@ public class PlayCommandModules : ApplicationCommandModule
     public static async Task Play(InteractionContext ctx, [Option("query", "The song to play")] string query)
     {
         LavaLinkController.Vnext = ctx.Client.GetLavalink();
-        var node = LavaLinkController.Vnext?.ConnectedNodes.Values.FirstOrDefault();
-        if (node == null)
-        {
-            await ctx.CreateResponseAsync("Lavalink is not connected or no connection nodes found.");
-            return;
-        }
+        var node = await EnsureLavalinkConnection(ctx);
+        if (node == null) return;
 
-        LavaLinkController.Connection = node.GetGuildConnection(ctx.Guild);
-        if (LavaLinkController.Connection == null)
-        {
-            var channel = ctx.Member.VoiceState.Channel;
-            await node.ConnectAsync(channel);
-            LavaLinkController.Connection = node.GetGuildConnection(ctx.Guild);
-        }
+        var connection = await EnsureVoiceConnection(ctx, node);
+        if (connection == null) return;
 
         LavaLinkController.Connection.PlaybackFinished += OnPlaybackFinished;
         try
@@ -45,6 +36,29 @@ public class PlayCommandModules : ApplicationCommandModule
         {
             await ctx.CreateResponseAsync($"An error occurred: {ex.Message}");
         }
+    }
+
+    private static async Task<LavalinkNodeConnection?> EnsureLavalinkConnection(InteractionContext ctx)
+    {
+        LavaLinkController.Vnext = ctx.Client.GetLavalink();
+        var node = LavaLinkController.Vnext?.ConnectedNodes.Values.FirstOrDefault();
+        if (node == null) await ctx.CreateResponseAsync("Lavalink is not connected or no connection nodes found.");
+
+        return node;
+    }
+
+    private static async Task<LavalinkGuildConnection?> EnsureVoiceConnection(InteractionContext ctx,
+        LavalinkNodeConnection node)
+    {
+        LavaLinkController.Connection = node.GetGuildConnection(ctx.Guild);
+        if (LavaLinkController.Connection == null)
+        {
+            var channel = ctx.Member.VoiceState.Channel;
+            await node.ConnectAsync(channel);
+            LavaLinkController.Connection = node.GetGuildConnection(ctx.Guild);
+        }
+
+        return LavaLinkController.Connection;
     }
 
     private static async Task LoadFeedback(LavalinkLoadResult loadResult, InteractionContext ctx)
@@ -129,6 +143,5 @@ public class PlayCommandModules : ApplicationCommandModule
         queue.Clear();
         _disconnectTimer?.Dispose();
         _disconnectTimer = null;
-        GC.Collect();
     }
 }

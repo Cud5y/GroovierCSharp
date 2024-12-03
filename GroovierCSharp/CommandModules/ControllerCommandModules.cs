@@ -1,148 +1,18 @@
-using System.Collections.Concurrent;
 using DSharpPlus.Entities;
 using DSharpPlus.Lavalink;
-using DSharpPlus.Lavalink.EventArgs;
 using DSharpPlus.SlashCommands;
+using GroovierCSharp.Controllers;
 
 namespace GroovierCSharp.CommandModules;
 
 public class ControllerCommandModules : ApplicationCommandModule
 {
-    private static LavalinkExtension _vnext = null!;
-    private static LavalinkNodeConnection _node = null!;
-    private static Timer? _disconnectTimer;
-    public static bool Loop { get; set; }
-    public static LavalinkGuildConnection Connection { get; private set; } = null!;
-    public static ConcurrentQueue<LavalinkTrack> Queue { get; set; } = new();
-    public static ConcurrentQueue<LavalinkTrack> History { get; set; } = new();
-
-    [SlashCommand("play", "Plays a song")]
-    public static async Task Play(InteractionContext ctx, [Option("query", "The song to play")] string query)
-    {
-        _vnext = ctx.Client.GetLavalink();
-        var node = _vnext?.ConnectedNodes.Values.FirstOrDefault();
-        if (node == null)
-        {
-            await ctx.CreateResponseAsync("Lavalink is not connected or no connection nodes found.");
-            return;
-        }
-
-        Connection = node.GetGuildConnection(ctx.Guild);
-        if (Connection == null)
-        {
-            var channel = ctx.Member.VoiceState.Channel;
-            await node.ConnectAsync(channel);
-            Connection = node.GetGuildConnection(ctx.Guild);
-        }
-
-        Connection.PlaybackFinished += OnPlaybackFinished;
-        try
-        {
-            LavalinkLoadResult loadResult;
-            if (Uri.TryCreate(query, UriKind.Absolute, out var uri))
-            {
-                loadResult = await node.Rest.GetTracksAsync(uri);
-            }
-            else
-            {
-                loadResult = await node.Rest.GetTracksAsync(query);
-            }
-
-            await LoadFeedback(loadResult, ctx);
-            var track = loadResult.Tracks.First();
-            await PlaySong(track, ctx);
-        }
-        catch (Exception ex)
-        {
-            await ctx.CreateResponseAsync($"An error occurred: {ex.Message}");
-        }
-    }
-
-    private static async Task LoadFeedback(LavalinkLoadResult loadResult, InteractionContext ctx)
-    {
-        switch (loadResult.LoadResultType)
-        {
-            case LavalinkLoadResultType.NoMatches:
-                await ctx.CreateResponseAsync("No matches found for the query.");
-                return;
-            case LavalinkLoadResultType.LoadFailed:
-                await ctx.CreateResponseAsync("Failed to load tracks.");
-                return;
-            case LavalinkLoadResultType.PlaylistLoaded:
-                foreach (var playlistTrack in loadResult.Tracks) Queue.Enqueue(playlistTrack);
-
-                var playlistEmbed = EmbedCreator("Playlist Loaded",
-                    $"Loaded playlist with {loadResult.Tracks.Count()} tracks.");
-                await ctx.CreateResponseAsync(playlistEmbed);
-                break;
-        }
-    }
-
-    private static async Task PlaySong(LavalinkTrack track, InteractionContext ctx)
-    {
-        if (Connection.CurrentState.CurrentTrack is not null)
-        {
-            Queue.Enqueue(track);
-            var embed = EmbedCreator("Added to Queue", track.Title);
-            await ctx.CreateResponseAsync(embed);
-        }
-        else
-        {
-            History.Enqueue(track);
-            await Connection.PlayAsync(track);
-            var embed = EmbedCreator("Playing", track.Title);
-            await ctx.CreateResponseAsync(embed);
-            ResetDisconnectTimer(); // Reset the timer when a new song starts playing
-        }
-    }
-
-    private static async Task OnPlaybackFinished(LavalinkGuildConnection sender, TrackFinishEventArgs e)
-    {
-        if (Connection.CurrentState.CurrentTrack is not null) return;
-        if (Loop)
-        {
-            History.Enqueue(History.Last());
-            await Connection.PlayAsync(History.Last());
-            return;
-        }
-
-        if (Queue.TryDequeue(out var nextTrack))
-        {
-            History.Enqueue(nextTrack);
-            await sender.PlayAsync(nextTrack);
-        }
-        else
-        {
-            StartDisconnectTimer(); // Start the timer when no more songs are in the queue
-        }
-    }
-
-    private static void StartDisconnectTimer()
-    {
-        _disconnectTimer?.Dispose();
-        _disconnectTimer = new Timer(DisconnectBot, null, TimeSpan.FromMinutes(15), Timeout.InfiniteTimeSpan);
-    }
-
-    private static void ResetDisconnectTimer()
-    {
-        _disconnectTimer?.Change(Timeout.Infinite, Timeout.Infinite);
-    }
-
-    private static void DisconnectBot(object? state)
-    {
-        Connection.DisconnectAsync();
-        Queue.Clear();
-        _disconnectTimer?.Dispose();
-        _disconnectTimer = null;
-        GC.Collect();
-    }
-
     [SlashCommand("Pause", "Pauses the current song")]
     public static async Task Pause(InteractionContext ctx)
     {
         await ConnectionSetup(ctx);
-        await Connection.PauseAsync();
-        var embed = EmbedCreator("Paused", Connection.CurrentState.CurrentTrack.Title);
+        await LavaLinkController.Connection.PauseAsync();
+        var embed = EmbedCreator("Paused", LavaLinkController.Connection.CurrentState.CurrentTrack.Title);
         await ctx.CreateResponseAsync(embed);
     }
 
@@ -150,8 +20,8 @@ public class ControllerCommandModules : ApplicationCommandModule
     public static async Task Resume(InteractionContext ctx)
     {
         await ConnectionSetup(ctx);
-        await Connection.ResumeAsync();
-        var embed = EmbedCreator("Resumed", Connection.CurrentState.CurrentTrack.Title);
+        await LavaLinkController.Connection.ResumeAsync();
+        var embed = EmbedCreator("Resumed", LavaLinkController.Connection.CurrentState.CurrentTrack.Title);
         await ctx.CreateResponseAsync(embed);
     }
 
@@ -159,9 +29,10 @@ public class ControllerCommandModules : ApplicationCommandModule
     public static async Task Stop(InteractionContext ctx)
     {
         await ConnectionSetup(ctx);
-        Queue.Clear();
-        await Connection.StopAsync();
-        var embed = EmbedCreator("Stopped", Connection.CurrentState.CurrentTrack.Title);
+        GuildQueueManager.TryGetQueue(ctx.Guild.Id, out var queue);
+        queue.Clear();
+        await LavaLinkController.Connection.StopAsync();
+        var embed = EmbedCreator("Stopped", LavaLinkController.Connection.CurrentState.CurrentTrack.Title);
         await ctx.CreateResponseAsync(embed);
     }
 
@@ -169,35 +40,35 @@ public class ControllerCommandModules : ApplicationCommandModule
     public static async Task Skip(InteractionContext ctx)
     {
         await ConnectionSetup(ctx);
-        var embed = EmbedCreator("Skipping", Connection.CurrentState.CurrentTrack.Title);
+        var embed = EmbedCreator("Skipping", LavaLinkController.Connection.CurrentState.CurrentTrack.Title);
         await ctx.CreateResponseAsync(embed);
-        await Connection.StopAsync();
+        await LavaLinkController.Connection.StopAsync();
     }
 
     public static async Task ConnectionSetup(InteractionContext ctx)
     {
-        _vnext = ctx.Client.GetLavalink();
-        if (_vnext is null)
+        LavaLinkController.Vnext = ctx.Client.GetLavalink();
+        if (LavaLinkController.Vnext is null)
         {
             await ctx.CreateResponseAsync("Lavalink is not connected.");
             return;
         }
 
-        _node = _vnext.ConnectedNodes.Values.First();
-        if (_node is null)
+        LavaLinkController.Node = LavaLinkController.Vnext.ConnectedNodes.Values.First();
+        if (LavaLinkController.Node is null)
         {
             await ctx.CreateResponseAsync("No connection nodes found.");
             return;
         }
 
         // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
-        if (Connection is null)
+        if (LavaLinkController.Connection is null)
         {
             await ctx.CreateResponseAsync("No active connection found.");
             return;
         }
 
-        if (Connection.CurrentState.CurrentTrack is null)
+        if (LavaLinkController.Connection.CurrentState.CurrentTrack is null)
             await ctx.CreateResponseAsync("Nothing is currently playing.");
     }
 

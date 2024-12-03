@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using DSharpPlus.Entities;
 using DSharpPlus.Lavalink;
 using DSharpPlus.SlashCommands;
+using GroovierCSharp.Controllers;
 using LyricsScraperNET;
 using LyricsScraperNET.Models.Requests;
 
@@ -20,7 +21,7 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
             return;
         }
 
-        await ControllerCommandModules.Connection.SetVolumeAsync((int)volume);
+        await LavaLinkController.Connection.SetVolumeAsync((int)volume);
         var embed = ControllerCommandModules.EmbedCreator("Volume", $"Volume set to {volume}");
         await ctx.CreateResponseAsync(embed);
     }
@@ -31,7 +32,7 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
         TimeSpan? position)
     {
         await ControllerCommandModules.ConnectionSetup(ctx);
-        if (position < TimeSpan.Zero || position > ControllerCommandModules.Connection.CurrentState.CurrentTrack.Length)
+        if (position < TimeSpan.Zero || position > LavaLinkController.Connection.CurrentState.CurrentTrack.Length)
         {
             var embed = ControllerCommandModules.EmbedCreator("Seek", "Invalid position.");
             await ctx.CreateResponseAsync(embed);
@@ -40,7 +41,7 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
 
         if (position != null)
         {
-            await ControllerCommandModules.Connection.SeekAsync(position.Value);
+            await LavaLinkController.Connection.SeekAsync(position.Value);
             var embed = ControllerCommandModules.EmbedCreator("Seek", $"Seeked to {position}");
             await ctx.CreateResponseAsync(embed);
             return;
@@ -54,9 +55,9 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
     public static async Task Loop(InteractionContext ctx)
     {
         await ControllerCommandModules.ConnectionSetup(ctx);
-        ControllerCommandModules.Loop = !ControllerCommandModules.Loop;
-        await ctx.CreateResponseAsync($"Looping set to {ControllerCommandModules.Loop}");
-        var embed = ControllerCommandModules.EmbedCreator("Loop", $"Looping set to {ControllerCommandModules.Loop}");
+        LavaLinkController.Loop = !LavaLinkController.Loop;
+        await ctx.CreateResponseAsync($"Looping set to {LavaLinkController.Loop}");
+        var embed = ControllerCommandModules.EmbedCreator("Loop", $"Looping set to {LavaLinkController.Loop}");
         await ctx.CreateResponseAsync(embed);
     }
 
@@ -64,9 +65,11 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
     public static async Task Shuffle(InteractionContext ctx)
     {
         await ControllerCommandModules.ConnectionSetup(ctx);
-        var queue = ControllerCommandModules.Queue.ToArray();
-        var history = ControllerCommandModules.History.ToArray();
-        var shuffled = queue.Concat(history).ToArray();
+        GuildQueueManager.TryGetQueue(ctx.Guild.Id, out var queue);
+        var queueArray = queue.ToArray();
+        HistoryQueueManager.TryGetHistory(ctx.Guild.Id, out var history);
+        var historyArray = history.ToArray();
+        var shuffled = queueArray.Concat(historyArray).ToArray();
         var rng = new Random();
         for (var i = shuffled.Length - 1; i > 0; i--)
         {
@@ -74,7 +77,9 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
             (shuffled[i], shuffled[j]) = (shuffled[j], shuffled[i]);
         }
 
-        ControllerCommandModules.Queue = new ConcurrentQueue<LavalinkTrack>(shuffled);
+        queue.Clear();
+        foreach (var item in shuffled) GuildQueueManager.AddTrackToQueue(ctx.Guild.Id, item);
+
         var embed = ControllerCommandModules.EmbedCreator("Queue", "Queue has been shuffled.");
         await ctx.CreateResponseAsync(embed);
     }
@@ -83,29 +88,24 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
     public static async Task Rewind(InteractionContext ctx)
     {
         await ControllerCommandModules.ConnectionSetup(ctx);
-        if (ControllerCommandModules.History.Count > 0)
+        if (!HistoryQueueManager.TryGetHistory(ctx.Guild.Id, out var history) || history.Count == 0)
         {
-            var previousTrack = ControllerCommandModules.History.Last();
-            var currentTrack = ControllerCommandModules.Connection.CurrentState.CurrentTrack;
-            ConcurrentQueue<LavalinkTrack> queueCopy = new();
-            queueCopy.Enqueue(currentTrack);
-            foreach (var tracks in ControllerCommandModules.Queue) queueCopy.Enqueue(tracks);
+            await ctx.CreateResponseAsync(ControllerCommandModules.EmbedCreator("Rewinding", "No previous track."));
+            return;
+        }
 
-            ControllerCommandModules.Queue = queueCopy;
-            await ControllerCommandModules.Connection.PlayAsync(previousTrack);
-            var embed = ControllerCommandModules.EmbedCreator("Rewinding",
-                ControllerCommandModules.Connection.CurrentState.CurrentTrack.Title);
-            await ctx.CreateResponseAsync(embed);
-            ControllerCommandModules.History =
-                new ConcurrentQueue<LavalinkTrack>(
-                    ControllerCommandModules.History.Take(ControllerCommandModules.History.Count - 1));
-            GC.Collect();
-        }
-        else
-        {
-            var embed = ControllerCommandModules.EmbedCreator("Rewinding", "No previous track.");
-            await ctx.CreateResponseAsync(embed);
-        }
+        var previousTrack = history.Last();
+        var currentTrack = LavaLinkController.Connection.CurrentState.CurrentTrack;
+        GuildQueueManager.TryGetQueue(ctx.Guild.Id, out var queue);
+
+        queue = new ConcurrentQueue<LavalinkTrack>(queue.Prepend(currentTrack));
+        foreach (var track in queue) GuildQueueManager.AddTrackToQueue(ctx.Guild.Id, track);
+
+        await LavaLinkController.Connection.PlayAsync(previousTrack);
+        await ctx.CreateResponseAsync(ControllerCommandModules.EmbedCreator("Rewinding", previousTrack.Title));
+
+        history = new ConcurrentQueue<LavalinkTrack>(history.Take(history.Count - 1));
+        foreach (var track in history) HistoryQueueManager.AddTrackToHistory(ctx.Guild.Id, track);
     }
 
     [SlashCommand("Lyrics", "Displays the lyrics of the current track")]
@@ -114,8 +114,8 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
         await ControllerCommandModules.ConnectionSetup(ctx);
         await ctx.CreateResponseAsync("Searching for lyrics...");
         var lyricsScraperClient = new LyricsScraperClient().WithAllProviders();
-        var artist = ControllerCommandModules.Connection.CurrentState.CurrentTrack.Author;
-        var track = ControllerCommandModules.Connection.CurrentState.CurrentTrack.Title;
+        var artist = LavaLinkController.Connection.CurrentState.CurrentTrack.Author;
+        var track = LavaLinkController.Connection.CurrentState.CurrentTrack.Title;
         var cleanTrack = CleanTrackTitle(track, artist);
         var searchRequest = new ArtistAndSongSearchRequest(artist, cleanTrack);
         var searchResult = await lyricsScraperClient.SearchLyricAsync(searchRequest);
@@ -123,7 +123,7 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
         {
             DiscordEmbedBuilder embed = new()
             {
-                Title = ControllerCommandModules.Connection.CurrentState.CurrentTrack.Title,
+                Title = LavaLinkController.Connection.CurrentState.CurrentTrack.Title,
                 Description = searchResult.LyricText,
                 Color = new DiscordColor(0xb16ad4)
             };
@@ -142,7 +142,7 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
         var wordsToRemove = new[]
         {
             "official", "video", "lyrics", "audio", "ft.", "feat.", "remix", "version", "lyric", "music", "hd", "hq",
-            "full", "song", "original", "visualizer", "visualiser,1080p", "-", "4k", artist
+            "full", "song", "original", "visualizer", "visualiser,1080p", "-", "4k", artist, "vevo", "vevoofficial"
         };
 
         title = wordsToRemove.Aggregate(title,

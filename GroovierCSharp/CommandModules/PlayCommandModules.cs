@@ -138,11 +138,12 @@ public class PlayCommandModules : ApplicationCommandModule
 
     private static void DisconnectBot(object? state)
     {
+        var guildId = LavaLinkController.Connection.Guild.Id;
         LavaLinkController.Connection.DisconnectAsync();
-        GuildQueueManager.TryGetQueue(LavaLinkController.Connection.Guild.Id, out var queue);
+        GuildQueueManager.TryGetQueue(guildId, out var queue);
         queue.Clear();
-        GuildQueueManager.RemoveQueue(LavaLinkController.Connection.Guild.Id);
-        HistoryQueueManager.RemoveHistory(LavaLinkController.Connection.Guild.Id);
+        GuildQueueManager.RemoveQueue(guildId);
+        HistoryQueueManager.RemoveHistory(guildId);
         _disconnectTimer?.Dispose();
         _disconnectTimer = null;
     }

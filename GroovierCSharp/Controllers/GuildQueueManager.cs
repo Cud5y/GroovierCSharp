@@ -28,4 +28,9 @@ public readonly record struct GuildQueueManager
         track = null!;
         return false;
     }
+
+    public static void RemoveQueue(ulong guildId)
+    {
+        GuildQueues.TryRemove(guildId, out _);
+    }
 }

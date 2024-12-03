@@ -141,6 +141,8 @@ public class PlayCommandModules : ApplicationCommandModule
         LavaLinkController.Connection.DisconnectAsync();
         GuildQueueManager.TryGetQueue(LavaLinkController.Connection.Guild.Id, out var queue);
         queue.Clear();
+        GuildQueueManager.RemoveQueue(LavaLinkController.Connection.Guild.Id);
+        HistoryQueueManager.RemoveHistory(LavaLinkController.Connection.Guild.Id);
         _disconnectTimer?.Dispose();
         _disconnectTimer = null;
     }

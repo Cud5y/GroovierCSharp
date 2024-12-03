@@ -25,4 +25,9 @@ public readonly record struct HistoryQueueManager
         track = null!;
         return false;
     }
+
+    public static void RemoveHistory(ulong guildId)
+    {
+        GuildHistory.TryRemove(guildId, out _);
+    }
 }

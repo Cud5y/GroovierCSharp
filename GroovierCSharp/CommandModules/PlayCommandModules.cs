@@ -16,10 +16,14 @@ public class PlayCommandModules : ApplicationCommandModule
         var node = await EnsureLavalinkConnection(ctx);
         if (node == null) return;
 
-        var connection = await EnsureVoiceConnection(ctx, node);
-        if (connection == null) return;
+        if (await EnsureVoiceConnection(ctx, node) is null) await node.ConnectAsync(ctx.Member.VoiceState.Channel);
 
-        LavaLinkController.Connection.PlaybackFinished += OnPlaybackFinished;
+        LavaLinkController.Connection[ctx.Guild.Id] = await EnsureVoiceConnection(ctx, node);
+        // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
+        if (LavaLinkController.Connection[ctx.Guild.Id] == null)
+            await ctx.CreateResponseAsync("Failed to connect to voice channel.");
+
+        LavaLinkController.Connection[ctx.Guild.Id].PlaybackFinished += OnPlaybackFinished;
         try
         {
             LavalinkLoadResult loadResult;
@@ -50,15 +54,16 @@ public class PlayCommandModules : ApplicationCommandModule
     private static async Task<LavalinkGuildConnection?> EnsureVoiceConnection(InteractionContext ctx,
         LavalinkNodeConnection node)
     {
-        LavaLinkController.Connection = node.GetGuildConnection(ctx.Guild);
+        LavaLinkController.Connection[ctx.Guild.Id] = node.GetGuildConnection(ctx.Guild);
+        // ReSharper disable once ConditionIsAlwaysTrueOrFalse
         if (LavaLinkController.Connection == null)
         {
             var channel = ctx.Member.VoiceState.Channel;
             await node.ConnectAsync(channel);
-            LavaLinkController.Connection = node.GetGuildConnection(ctx.Guild);
+            LavaLinkController.Connection![ctx.Guild.Id] = node.GetGuildConnection(ctx.Guild);
         }
 
-        return LavaLinkController.Connection;
+        return LavaLinkController.Connection[ctx.Guild.Id];
     }
 
     private static async Task LoadFeedback(LavalinkLoadResult loadResult, InteractionContext ctx)
@@ -87,7 +92,8 @@ public class PlayCommandModules : ApplicationCommandModule
 
     private static async Task PlaySong(LavalinkTrack track, InteractionContext ctx)
     {
-        if (LavaLinkController.Connection.CurrentState.CurrentTrack is not null)
+        var connection = LavaLinkController.Connection[ctx.Guild.Id];
+        if (connection.CurrentState.CurrentTrack is not null)
         {
             GuildQueueManager.AddTrackToQueue(ctx.Guild.Id, track);
             var embed = ControllerCommandModules.EmbedCreator("Added to Queue", track.Title);
@@ -96,7 +102,7 @@ public class PlayCommandModules : ApplicationCommandModule
         else
         {
             HistoryQueueManager.AddTrackToHistory(ctx.Guild.Id, track);
-            await LavaLinkController.Connection.PlayAsync(track);
+            await connection.PlayAsync(track);
             var embed = ControllerCommandModules.EmbedCreator("Playing", track.Title);
             await ctx.CreateResponseAsync(embed);
             ResetDisconnectTimer(); // Reset the timer when a new song starts playing
@@ -105,12 +111,13 @@ public class PlayCommandModules : ApplicationCommandModule
 
     private static async Task OnPlaybackFinished(LavalinkGuildConnection sender, TrackFinishEventArgs e)
     {
-        if (LavaLinkController.Connection.CurrentState.CurrentTrack is not null) return;
-        if (LavaLinkController.Loop)
+        var connection = LavaLinkController.Connection[sender.Guild.Id];
+        if (connection.CurrentState.CurrentTrack is not null) return;
+        if (LavaLinkController.Loop[sender.Guild.Id])
         {
             HistoryQueueManager.TryGetHistory(sender.Guild.Id, out var history);
             HistoryQueueManager.AddTrackToHistory(sender.Guild.Id, history.Last());
-            await LavaLinkController.Connection.PlayAsync(history.Last());
+            await connection.PlayAsync(history.Last());
             return;
         }
 
@@ -121,14 +128,14 @@ public class PlayCommandModules : ApplicationCommandModule
         }
         else
         {
-            StartDisconnectTimer(); // Start the timer when no more songs are in the queue
+            StartDisconnectTimer(sender); // Start the timer when no more songs are in the queue
         }
     }
 
-    private static void StartDisconnectTimer()
+    private static void StartDisconnectTimer(LavalinkGuildConnection sender)
     {
         _disconnectTimer?.Dispose();
-        _disconnectTimer = new Timer(DisconnectBot, null, TimeSpan.FromMinutes(15), Timeout.InfiniteTimeSpan);
+        _disconnectTimer = new Timer(DisconnectBot, sender, TimeSpan.FromMinutes(15), Timeout.InfiniteTimeSpan);
     }
 
     private static void ResetDisconnectTimer()
@@ -138,12 +145,14 @@ public class PlayCommandModules : ApplicationCommandModule
 
     private static void DisconnectBot(object? state)
     {
-        var guildId = LavaLinkController.Connection.Guild.Id;
-        LavaLinkController.Connection.DisconnectAsync();
-        GuildQueueManager.TryGetQueue(guildId, out var queue);
-        GuildQueueManager.RemoveQueue(guildId);
-        HistoryQueueManager.RemoveHistory(guildId);
-        _disconnectTimer?.Dispose();
-        _disconnectTimer = null;
+        if (state is LavalinkGuildConnection sender)
+        {
+            var connection = LavaLinkController.Connection[sender.Guild.Id];
+            connection.DisconnectAsync();
+            GuildQueueManager.RemoveQueue(sender.Guild.Id);
+            HistoryQueueManager.RemoveHistory(sender.Guild.Id);
+            _disconnectTimer?.Dispose();
+            _disconnectTimer = null;
+        }
     }
 }

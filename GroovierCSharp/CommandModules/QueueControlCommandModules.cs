@@ -79,8 +79,9 @@ public class QueueControlCommandModules : ApplicationCommandModule
     [SlashCommand("NowPlaying", "Shows the currently playing song")]
     public static async Task NowPlaying(InteractionContext ctx)
     {
-        var track = LavaLinkController.Connection.CurrentState.CurrentTrack;
-        var trackPosition = LavaLinkController.Connection.CurrentState.PlaybackPosition.ToString(@"hh\:mm\:ss");
+        var connection = LavaLinkController.Connection[ctx.Guild.Id];
+        var track = connection.CurrentState.CurrentTrack;
+        var trackPosition = connection.CurrentState.PlaybackPosition.ToString(@"hh\:mm\:ss");
         if (track is null)
         {
             var embed = ControllerCommandModules.EmbedCreator("Now Playing", "Nothing is currently playing.");

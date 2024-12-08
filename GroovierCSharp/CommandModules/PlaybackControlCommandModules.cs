@@ -15,13 +15,14 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
     public static async Task Volume(InteractionContext ctx, [Option("volume", "The volume to set")] long volume)
     {
         await ControllerCommandModules.ConnectionSetup(ctx);
+        var connection = LavaLinkController.Connection[ctx.Guild.Id];
         if (volume < 0 || volume > 100)
         {
             await ctx.CreateResponseAsync("Volume must be between 0 and 100.");
             return;
         }
 
-        await LavaLinkController.Connection.SetVolumeAsync((int)volume);
+        await connection.SetVolumeAsync((int)volume);
         var embed = ControllerCommandModules.EmbedCreator("Volume", $"Volume set to {volume}");
         await ctx.CreateResponseAsync(embed);
     }
@@ -32,7 +33,8 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
         TimeSpan? position)
     {
         await ControllerCommandModules.ConnectionSetup(ctx);
-        if (position < TimeSpan.Zero || position > LavaLinkController.Connection.CurrentState.CurrentTrack.Length)
+        var connection = LavaLinkController.Connection[ctx.Guild.Id];
+        if (position < TimeSpan.Zero || position > connection.CurrentState.CurrentTrack.Length)
         {
             var embed = ControllerCommandModules.EmbedCreator("Seek", "Invalid position.");
             await ctx.CreateResponseAsync(embed);
@@ -41,7 +43,7 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
 
         if (position != null)
         {
-            await LavaLinkController.Connection.SeekAsync(position.Value);
+            await connection.SeekAsync(position.Value);
             var embed = ControllerCommandModules.EmbedCreator("Seek", $"Seeked to {position}");
             await ctx.CreateResponseAsync(embed);
             return;
@@ -55,7 +57,7 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
     public static async Task Loop(InteractionContext ctx)
     {
         await ControllerCommandModules.ConnectionSetup(ctx);
-        LavaLinkController.Loop = !LavaLinkController.Loop;
+        LavaLinkController.Loop[ctx.Guild.Id] = !LavaLinkController.Loop[ctx.Guild.Id];
         await ctx.CreateResponseAsync($"Looping set to {LavaLinkController.Loop}");
         var embed = ControllerCommandModules.EmbedCreator("Loop", $"Looping set to {LavaLinkController.Loop}");
         await ctx.CreateResponseAsync(embed);
@@ -88,6 +90,7 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
     public static async Task Rewind(InteractionContext ctx)
     {
         await ControllerCommandModules.ConnectionSetup(ctx);
+        var connection = LavaLinkController.Connection[ctx.Guild.Id];
         if (!HistoryQueueManager.TryGetHistory(ctx.Guild.Id, out var history) || history.Count == 0)
         {
             await ctx.CreateResponseAsync(ControllerCommandModules.EmbedCreator("Rewinding", "No previous track."));
@@ -95,13 +98,13 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
         }
 
         var previousTrack = history.Last();
-        var currentTrack = LavaLinkController.Connection.CurrentState.CurrentTrack;
+        var currentTrack = connection.CurrentState.CurrentTrack;
         GuildQueueManager.TryGetQueue(ctx.Guild.Id, out var queue);
 
         queue = new ConcurrentQueue<LavalinkTrack>(queue.Prepend(currentTrack));
         foreach (var track in queue) GuildQueueManager.AddTrackToQueue(ctx.Guild.Id, track);
 
-        await LavaLinkController.Connection.PlayAsync(previousTrack);
+        await connection.PlayAsync(previousTrack);
         await ctx.CreateResponseAsync(ControllerCommandModules.EmbedCreator("Rewinding", previousTrack.Title));
 
         history = new ConcurrentQueue<LavalinkTrack>(history.Take(history.Count - 1));
@@ -112,10 +115,11 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
     public static async Task Lyrics(InteractionContext ctx)
     {
         await ControllerCommandModules.ConnectionSetup(ctx);
+        var connection = LavaLinkController.Connection[ctx.Guild.Id];
         await ctx.CreateResponseAsync("Searching for lyrics...");
         var lyricsScraperClient = new LyricsScraperClient().WithAllProviders();
-        var artist = LavaLinkController.Connection.CurrentState.CurrentTrack.Author;
-        var track = LavaLinkController.Connection.CurrentState.CurrentTrack.Title;
+        var artist = connection.CurrentState.CurrentTrack.Author;
+        var track = connection.CurrentState.CurrentTrack.Title;
         var cleanTrack = CleanTrackTitle(track, artist);
         var searchRequest = new ArtistAndSongSearchRequest(artist, cleanTrack);
         var searchResult = await lyricsScraperClient.SearchLyricAsync(searchRequest);
@@ -123,7 +127,7 @@ public partial class PlaybackControlCommandModules : ApplicationCommandModule
         {
             DiscordEmbedBuilder embed = new()
             {
-                Title = LavaLinkController.Connection.CurrentState.CurrentTrack.Title,
+                Title = connection.CurrentState.CurrentTrack.Title,
                 Description = searchResult.LyricText,
                 Color = new DiscordColor(0xb16ad4)
             };
